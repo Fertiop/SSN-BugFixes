@@ -36,7 +36,7 @@ public final class SsnInitialRegressionTests {
 
         // Assign the same stored connection that TileConnectable normally saves.
         CapabilityConnectable link = terminal.getCapability(
-                StorageNetworkCapabilities.CONNECTABLE_CAPABILITY, null).orElseThrow();
+                StorageNetworkCapabilities.CONNECTABLE_CAPABILITY, null).orElseThrow(() -> new IllegalStateException("SSN connectable capability missing"));
         link.setMainPos(new DimPos(helper.getLevel(), helper.absolutePos(new BlockPos(1, 1, 1))));
 
         terminal.setAutoFocus(true);
