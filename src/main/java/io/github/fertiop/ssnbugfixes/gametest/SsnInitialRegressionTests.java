@@ -4,6 +4,7 @@ import com.lothrazar.storagenetwork.api.DimPos;
 import com.lothrazar.storagenetwork.block.request.TileRequest;
 import com.lothrazar.storagenetwork.capability.CapabilityConnectable;
 import com.lothrazar.storagenetwork.item.ItemBuilder;
+import com.lothrazar.storagenetwork.registry.SsnRegistry;
 import com.lothrazar.storagenetwork.registry.StorageNetworkCapabilities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -13,6 +14,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Real SSN methods, real Minecraft NBT and registry, not mocks of our patches.
@@ -22,14 +24,15 @@ import net.minecraftforge.gametest.GameTestHolder;
  * to establish GREEN. No such runs have yet been performed.
  */
 @GameTestHolder("ssnbugfixes")
+@PrefixGameTestTemplate(false)
 public final class SsnInitialRegressionTests {
 
     private SsnInitialRegressionTests() {}
 
-    @GameTest(template = "minecraft:empty")
+    @GameTest(template = "empty")
     public static void requestTerminalSavesInheritedConnection(GameTestHelper helper) {
         TileRequest terminal = new TileRequest(
-                BlockPos.ZERO, Blocks.CRAFTING_TABLE.defaultBlockState());
+                BlockPos.ZERO, SsnRegistry.Blocks.REQUEST.get().defaultBlockState());
 
         // Assign the same stored connection that TileConnectable normally saves.
         CapabilityConnectable link = terminal.getCapability(
@@ -55,7 +58,7 @@ public final class SsnInitialRegressionTests {
         }
 
         // Round-trip from NBT into a new real SSN tile, not a substituted model.
-        TileRequest restored = new TileRequest(BlockPos.ZERO, Blocks.CRAFTING_TABLE.defaultBlockState());
+        TileRequest restored = new TileRequest(BlockPos.ZERO, SsnRegistry.Blocks.REQUEST.get().defaultBlockState());
         restored.load(saved);
         CompoundTag afterLoad = restored.saveWithFullMetadata();
         if (!afterLoad.contains("connectable", 10)
@@ -66,7 +69,7 @@ public final class SsnInitialRegressionTests {
         helper.succeed();
     }
 
-    @GameTest(template = "minecraft:empty")
+    @GameTest(template = "empty")
     public static void builderReturnsNullWithoutWorldEvenWithSavedState(GameTestHelper helper) {
         ItemStack remote = new ItemStack(Items.STICK);
         ItemBuilder.setBlockState(remote, Blocks.STONE.defaultBlockState());
@@ -77,7 +80,7 @@ public final class SsnInitialRegressionTests {
         helper.succeed();
     }
 
-    @GameTest(template = "minecraft:empty")
+    @GameTest(template = "empty")
     public static void builderReturnsNullWithoutWorldAndWithoutSavedState(GameTestHelper helper) {
         ItemStack remote = new ItemStack(Items.STICK);
         if (ItemBuilder.getBlockState(null, remote) != null) {
@@ -87,7 +90,7 @@ public final class SsnInitialRegressionTests {
         helper.succeed();
     }
 
-    @GameTest(template = "minecraft:empty")
+    @GameTest(template = "empty")
     public static void builderDecodesBlockStateWithRealWorld(GameTestHelper helper) {
         ItemStack remote = new ItemStack(Items.STICK);
         ItemBuilder.setBlockState(remote, Blocks.STONE.defaultBlockState());
