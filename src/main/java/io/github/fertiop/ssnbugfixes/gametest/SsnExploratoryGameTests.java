@@ -118,6 +118,72 @@ public final class SsnExploratoryGameTests {
         helper.succeed();
     }
 
+    /**
+     * Required positive control for SSN-004: normal honest handler must
+     * spend exactly one stone to place exactly one stone.
+     */
+    @GameTest(template = "empty", timeoutTicks = 80)
+    public static void ssn_004_normal_builder_placement_debits_stone(GameTestHelper helper) {
+        basicNetwork(helper);
+        ChestBlockEntity chest = (ChestBlockEntity) helper.getBlockEntity(CHEST);
+        chest.setItem(0, new ItemStack(Items.STONE, 2));
+        chest.setChanged();
+
+        ServerPlayer player = mockPlayerWithChannel(helper);
+        BlockPos base = new BlockPos(1, 1, 3);
+        helper.setBlock(base, Blocks.COBBLESTONE);
+        ItemStack remote = new ItemStack(SsnRegistry.Items.BUILDER_REMOTE.get());
+        DimPos.putPos(remote, helper.absolutePos(MASTER), helper.getLevel());
+        ItemBuilder.setBlockState(remote, Blocks.STONE.defaultBlockState());
+        player.setItemInHand(InteractionHand.MAIN_HAND, remote);
+        BlockPos abs = helper.absolutePos(base);
+        player.teleportTo(abs.getX() + 0.5, abs.getY() + 1.5, abs.getZ() + 0.5);
+        remote.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                new BlockHitResult(Vec3.atCenterOf(abs), Direction.UP, abs, false)));
+
+        helper.assertTrue(helper.getBlockState(base.above()).is(Blocks.STONE),
+                "Positive control: honest storage must allow builder remote to place one stone");
+        helper.assertTrue(chest.getItem(0).is(Items.STONE) && chest.getItem(0).getCount() == 1,
+                "Positive control: builder remote placement must debit exactly one stone");
+        helper.succeed();
+    }
+
+    /**
+     * Required positive control for SSN-005: non-stackable vanilla recipe
+     * inputs (one honey bottle per crafting slot) should not disappear.
+     */
+    @GameTest(template = "empty", timeoutTicks = 80)
+    public static void ssn_005_single_honey_per_slot_preserves_glass(GameTestHelper helper) {
+        basicNetwork(helper);
+        BlockPos request = new BlockPos(1, 1, 2);
+        helper.setBlock(request, SsnRegistry.Blocks.REQUEST.get());
+        ((TileMain) helper.getBlockEntity(MASTER)).getNetwork().doRefresh(
+                new DimPos(helper.getLevel(), helper.absolutePos(MASTER)));
+
+        ServerPlayer player = mockPlayerWithChannel(helper);
+        ContainerNetworkCraftingTable menu = new ContainerNetworkCraftingTable(
+                1, helper.getLevel(), helper.absolutePos(request), player.getInventory(), player);
+        int[] recipeSlots = {0, 1, 3, 4};
+        for (int slot : recipeSlots) {
+            menu.getCraftMatrix().setItem(slot, new ItemStack(Items.HONEY_BOTTLE));
+        }
+        menu.slotsChanged(menu.getCraftMatrix());
+        helper.assertTrue(count(menu.getCraftMatrix(), Items.HONEY_BOTTLE) == 4,
+                "Positive control: expected four honey bottles");
+        menu.quickMoveStack(player, 0);
+
+        int made = count(player.getInventory().items, Items.HONEY_BLOCK);
+        int honeyLeft = count(menu.getCraftMatrix(), Items.HONEY_BOTTLE)
+                + count(player.getInventory().items, Items.HONEY_BOTTLE);
+        int glass = count(menu.getCraftMatrix(), Items.GLASS_BOTTLE)
+                + count(player.getInventory().items, Items.GLASS_BOTTLE);
+
+        helper.assertTrue(made == 1 && honeyLeft == 0 && glass == 4,
+                "Positive control: 4 honey bottles must craft 1 block + 4 glass; got "
+                        + made + " blocks, " + honeyLeft + " honey, " + glass + " glass");
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 80, required = false)
     public static void ssn_005_stackable_honey_bottle_remainder_conservation(GameTestHelper helper) {
         // Vanilla HONEY_BOTTLE is stackable and returns GLASS_BOTTLE. This
