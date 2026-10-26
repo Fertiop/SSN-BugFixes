@@ -10,7 +10,7 @@ Important: these are SSN's own behavior paths, **not Factotum ↔ SSN compatibil
 | SSN-002 | ItemBuilder tooltip | game-tested null Level, client tooltip pending | NPE when tooltip receives a null Level | Validate null-argument contract and reproduction |
 | SSN-003 | Duplicate-target cable selection | hypothesis / code path confirmed | Priority/filter of second cable can be ignored | Determine intended dedup semantics; test differing priorities |
 | SSN-004 | Builder remote block placement | reproduced (divergent handler, game) | Block placed even if final item extraction fails | Reproduce simulate/execute divergence |
-| SSN-005 | Crafting ingredient remainder | upstream report, unverified in 1.13.2 | Possible item loss on shift-crafting | Reproduce on 1.13.2; compare upstream versions |
+| SSN-005 | Crafting ingredient remainder | reproduced (8 honey bottles, GameTest) | Possible item loss on shift-crafting | Reproduce on 1.13.2; compare upstream versions |
 | SSN-006 | Network list enumeration exception | reproduced (synthetic handler, game) | Failure of one storage stops enumeration of later storages | Test one faulty handler among valid handlers |
 
 ## SSN-001 — TileRequest saveAdditional does not save base connectable capability
@@ -49,7 +49,7 @@ Important: these are SSN's own behavior paths, **not Factotum ↔ SSN compatibil
 - **Regression checks:** capability that permits simulate but fails real extraction; concurrent mutation; block placement failure.
 
 ## SSN-005 — Crafting remainder on stackable ingredients
-- **Testing correction:** first live test showed missing honey/glass after shift craft, but it counted `NetworkCraftingInventory.getItems()`. That inherited method reads a different backing list from the actual SSN crafting grid. The test now counts `getItem(slot)` for every real slot and dropped ItemEntities; it also asserts that the vanilla recipe generates exactly four glass bottle remainders. **The first observation is not sufficient to confirm item loss.** Await the corrected GameTest; capture full after-state and compare vanilla recipe behavior.
+- **Testing correction:** first live test showed missing honey/glass after shift craft, but it counted `NetworkCraftingInventory.getItems()`. That inherited method reads a different backing list from the actual SSN crafting grid. The test now counts `getItem(slot)` for every real slot and dropped ItemEntities; it also asserts that the vanilla recipe generates exactly four glass bottle remainders. **The first observation alone was insufficient; corrected in-game test then reproduced missing ingredients.** Run [40378602235](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40378602235) executed the corrected slot-by-slot and dropped-entity count: input 8 honey bottles, result 1 honey block, 4 glass bottles, **0 remaining honey bottles** in crafting grid/player inventory or nearby dropped stacks. 4 expected unused honey bottles were not recovered. This matches the upstream `craftShift` branch that replaces a *stack* of consumed container items with a single crafting remainder. Fix is not implemented. Test initially had a `getItems()` counting bug; this evidence comes after correcting it.
 
 - **Source:** [upstream issue #576](https://github.com/Lothrazar/Storage-Network/issues/576) was reported against SSN 1.12.2, not proven in 1.13.2.
 - **Next checks:** stackable recipe remainder; shift-click; vanilla comparator; find any intervening fix.
@@ -86,3 +86,7 @@ Each entry must also record: exact SSN source commit and release JAR hash; envir
 - [Actions 40365724004](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40365724004): `build`, Mixin manifest/refmap, 6 static baseline checks and **12 required / 15 total Forge GameTests** passed at the framework level. Three optional failures: SSN-004 and SSN-006 **reproduced their intended behavior**; SSN-005 had a known bad counting method in its test fixture.
 - A corrected SSN-005 harness, an optional SSN-003 priority+filter probe, and CI gate for >=16 discovered GameTests were added afterwards. **Latest-head test outcome must be checked before merging**.
 - Test-only synthetic chest handlers and the `empty.nbt` structure are now excluded from the production JAR. The build CI validates that exclusion.
+
+### SSN-005 reproduction log (corrected test, 2026-10-26)
+
+[Actions 40378602235](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40378602235), Forge GameTest `ssn_005_stackable_honey_bottle_remainder_conservation`: `8 honey bottles -> 1 blocks, 0 unconsumed honey (0 in grid), 4 glass (4 in grid), 0 dropped stacks`; required in-game tests passed. The vanilla honey-block recipe requires 4 honey bottles per output, so 4 unused bottles should remain after producing one block. Verify also after closing UI, in offhand and normal player inventory, and with a controlled vanilla crafting benchmark before making a public bug claim.
