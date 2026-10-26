@@ -302,7 +302,7 @@ public final class SsnExploratoryGameTests {
      * The output slot has 63 honey blocks and can accept exactly one craft.
      * The four input cells contain two honey bottles each (8 total).
      */
-    @GameTest(template = "empty", timeoutTicks = 80, required = false)
+    @GameTest(template = "empty", timeoutTicks = 80)
     public static void ssn_005_full_player_inventory_preserves_crafting_remainders(GameTestHelper helper) {
         TileMain main = basicNetwork(helper);
         BlockPos request = new BlockPos(1, 1, 2);

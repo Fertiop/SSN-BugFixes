@@ -158,14 +158,12 @@ jobs:
               'ssn_004_failed_placement_refunds_consumed_stone',
               'ssn_004_request_must_not_report_simulation_as_real_debit',
               'ssn_005_stackable_honey_bottle_remainder_conservation',
+              'ssn_005_full_player_inventory_preserves_crafting_remainders',
               'ssn_006_failure_in_one_provider_keeps_other_items_visible',
           }
           expected_red = {name.lower() for name in expected_red}
-          # New exploratory test may or may not fail in the unpatched
-          # baseline. Its root-cause evidence is evaluated separately.
-          exploratory = {'ssn_005_full_player_inventory_preserves_crafting_remainders'}
           missing = expected_red - failed
-          unexpected = failed - expected_red - exploratory
+          unexpected = failed - expected_red
           if missing or unexpected:
               raise SystemExit(f'RED baseline invalid: missing expected {sorted(missing)}; unrelated failures {sorted(unexpected)}; all failures {sorted(failed)}')
           if not any('required tests failed' in x.lower() for x in log.splitlines()):
