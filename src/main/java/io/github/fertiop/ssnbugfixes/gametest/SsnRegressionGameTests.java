@@ -121,6 +121,38 @@ public final class SsnRegressionGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 80)
+    public static void ssn_004_nbt_variants_do_not_cross_extract(GameTestHelper helper) {
+        NetworkFixture fixture = network(helper, false);
+        ItemStack red = new ItemStack(Items.DIAMOND, 5);
+        red.getOrCreateTag().putString("variant", "red");
+        ItemStack blue = new ItemStack(Items.DIAMOND, 3);
+        blue.getOrCreateTag().putString("variant", "blue");
+
+        fixture.chest.setItem(0, red.copy());
+        fixture.chest.setItem(1, blue.copy());
+        fixture.chest.setChanged();
+        ItemStackMatcher matcher = new ItemStackMatcher(red.copy(), false, true);
+
+        ItemStack simulated = fixture.main.request(matcher, 2, true);
+        helper.assertTrue(simulated.getCount() == 2
+                        && simulated.getOrCreateTag().getString("variant").equals("red"),
+                "NBT-aware simulation must return two red diamonds");
+        helper.assertTrue(fixture.chest.getItem(0).getCount() == 5,
+                "NBT simulation must not change physical inventory");
+
+        ItemStack extracted = fixture.main.request(matcher, 2, false);
+        helper.assertTrue(extracted.getCount() == 2
+                        && extracted.getOrCreateTag().getString("variant").equals("red"),
+                "NBT-aware extraction returned the wrong stack");
+        helper.assertTrue(fixture.chest.getItem(0).getCount() == 3,
+                "Wrong remaining amount for red variant");
+        helper.assertTrue(fixture.chest.getItem(1).getCount() == 3
+                        && fixture.chest.getItem(1).getOrCreateTag().getString("variant").equals("blue"),
+                "NBT-aware request must not touch blue variant");
+        helper.succeed();
+    }
+
     private static NetworkFixture network(GameTestHelper helper, boolean duplicateLink) {
         helper.setBlock(MASTER, SsnRegistry.Blocks.MASTER.get());
         helper.setBlock(LINK, SsnRegistry.Blocks.STORAGE_KABEL.get());
