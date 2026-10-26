@@ -133,6 +133,8 @@ jobs:
           optional = {
               'ssn_003_higher_priority_duplicate_link_wins_filter',
               'ssn_004_no_free_block_on_failed_extraction',
+              'ssn_004_failed_placement_refunds_consumed_stone',
+              'ssn_004_request_must_not_report_simulation_as_real_debit',
               'ssn_005_stackable_honey_bottle_remainder_conservation',
               'ssn_006_failure_in_one_provider_keeps_other_items_visible',
           }
