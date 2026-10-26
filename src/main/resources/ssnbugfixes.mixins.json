@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "io.github.fertiop.ssnbugfixes.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "ssnbugfixes.refmap.json",
+  "mixins": [
+    "TileRequestSaveMixin",
+    "ItemBuilderNullLevelMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
