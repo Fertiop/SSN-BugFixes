@@ -21,6 +21,9 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
@@ -94,20 +97,35 @@ public final class SsnExploratoryGameTests {
             menu.getCraftMatrix().setItem(slot, new ItemStack(Items.HONEY_BOTTLE, 2));
         }
         menu.slotsChanged(menu.getCraftMatrix());
+        helper.assertTrue(count(menu.getCraftMatrix(), Items.HONEY_BOTTLE) == 8,
+                "SSN-005 fixture: all eight input honey bottles must be in the real crafting grid");
         menu.quickMoveStack(player, 0); // shift-click output
 
-        int honey = count(menu.getCraftMatrix().getItems(), Items.HONEY_BOTTLE)
-                + count(player.getInventory().items, Items.HONEY_BOTTLE);
-        int bottles = count(menu.getCraftMatrix().getItems(), Items.GLASS_BOTTLE)
-                + count(player.getInventory().items, Items.GLASS_BOTTLE);
-        int blocks = count(player.getInventory().items, Items.HONEY_BLOCK);
+        // NetworkCraftingInventory overrides getItem() and stores its own
+        // stackList. Its inherited getItems() accesses a different list:
+        // never count through getItems() here, or the test reports false losses.
+        List<ItemStack> ground = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                new AABB(player.blockPosition()).inflate(32))
+                .stream().map(ItemEntity::getItem).toList();
+        int honeyGrid = count(menu.getCraftMatrix(), Items.HONEY_BOTTLE);
+        int bottleGrid = count(menu.getCraftMatrix(), Items.GLASS_BOTTLE);
+        int honey = honeyGrid
+                + count(player.getInventory().items, Items.HONEY_BOTTLE)
+                + count(ground, Items.HONEY_BOTTLE);
+        int bottles = bottleGrid
+                + count(player.getInventory().items, Items.GLASS_BOTTLE)
+                + count(ground, Items.GLASS_BOTTLE);
+        int blocks = count(player.getInventory().items, Items.HONEY_BLOCK)
+                + count(ground, Items.HONEY_BLOCK);
 
         helper.assertTrue(blocks >= 1 && blocks <= 2,
                 "SSN-005 setup: expected 1-2 honey block crafts from 8 bottles, got " + blocks);
         helper.assertTrue(honey + 4 * blocks == 8 && bottles == 4 * blocks,
-                "SSN-005 conservation: input 8 honey bottles; made " + blocks
-                        + " blocks, remaining " + honey + " honey and " + bottles
-                        + " glass. Expected honey+4*blocks=8 and glass=4*blocks.");
+                "SSN-005 conservation: 8 honey bottles -> " + blocks
+                        + " blocks, " + honey + " unconsumed honey (" + honeyGrid
+                        + " in grid), " + bottles + " glass (" + bottleGrid
+                        + " in grid), " + ground.size()
+                        + " dropped stacks. Expected honey+4*blocks=8; glass=4*blocks.");
         helper.succeed();
     }
 
@@ -173,6 +191,17 @@ public final class SsnExploratoryGameTests {
         TileMain main = (TileMain) helper.getBlockEntity(MASTER);
         main.getNetwork().doRefresh(new DimPos(helper.getLevel(), helper.absolutePos(MASTER)));
         return main;
+    }
+
+    private static int count(Container container, net.minecraft.world.item.Item item) {
+        int total = 0;
+        for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            ItemStack stack = container.getItem(slot);
+            if (stack.is(item)) {
+                total += stack.getCount();
+            }
+        }
+        return total;
     }
 
     private static int count(List<ItemStack> stacks, net.minecraft.world.item.Item item) {
