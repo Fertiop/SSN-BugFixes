@@ -148,6 +148,39 @@ public final class SsnExploratoryGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 80)
+    public static void ssn_004_failed_placement_refunds_consumed_stone(GameTestHelper helper) {
+        TileMain main = basicNetwork(helper);
+        BlockPos base = new BlockPos(1, 1, 3);
+        BlockPos target = base.above();
+        helper.setBlock(base, Blocks.COBBLESTONE);
+        BlockPos chestPosition = helper.absolutePos(CHEST);
+        helper.getLevel().removeBlockEntity(chestPosition);
+        PlacementRaceChestBlockEntity raced = new PlacementRaceChestBlockEntity(
+                chestPosition, helper.getBlockState(CHEST), helper.absolutePos(target));
+        helper.getLevel().setBlockEntity(raced);
+        main.getNetwork().doRefresh(new DimPos(helper.getLevel(), helper.absolutePos(MASTER)));
+
+        ServerPlayer player = mockPlayerWithChannel(helper);
+        ItemStack remote = new ItemStack(SsnRegistry.Items.BUILDER_REMOTE.get());
+        DimPos.putPos(remote, helper.absolutePos(MASTER), helper.getLevel());
+        ItemBuilder.setBlockState(remote, Blocks.STONE.defaultBlockState());
+        player.setItemInHand(InteractionHand.MAIN_HAND, remote);
+        BlockPos absoluteBase = helper.absolutePos(base);
+        player.teleportTo(absoluteBase.getX() + 0.5,
+                absoluteBase.getY() + 1.5, absoluteBase.getZ() + 0.5);
+        remote.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                new BlockHitResult(Vec3.atCenterOf(absoluteBase),
+                        Direction.UP, absoluteBase, false)));
+
+        helper.assertTrue(raced.wasSpent(), "The simulated race must actually extract one stone");
+        helper.assertTrue(helper.getBlockState(target).is(Blocks.COBBLESTONE),
+                "The extraction race must have blocked the placement target");
+        helper.assertTrue(count(player.getInventory().items, Items.STONE) == 1,
+                "SSN-004: stone was debited but not returned to the player after failed placement");
+        helper.succeed();
+    }
+
     /**
      * Required positive control for SSN-005: non-stackable vanilla recipe
      * inputs (one honey bottle per crafting slot) should not disappear.
