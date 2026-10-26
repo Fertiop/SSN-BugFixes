@@ -6,7 +6,9 @@
   "refmap": "ssnbugfixes.refmap.json",
   "mixins": [
     "TileRequestSaveMixin",
-    "ItemBuilderNullLevelMixin"
+    "ItemBuilderNullLevelMixin",
+    "NetworkReadIsolationMixin",
+    "NetworkPriorityDedupMixin"
   ],
   "injectors": {
     "defaultRequire": 1
