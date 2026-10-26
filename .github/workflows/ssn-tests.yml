@@ -117,7 +117,7 @@ jobs:
           if '--mixin.config, ssnbugfixes.mixins.json' in log:
               raise SystemExit('RED baseline invalid: our Mixin configuration is still active')
           counts = [int(n) for n in re.findall(r"Running test batch '[^']+' \((\d+) tests\)", log)]
-          if sum(counts) < 19 or 'GAME TESTS COMPLETE' not in log:
+          if sum(counts) < 20 or 'GAME TESTS COMPLETE' not in log:
               raise SystemExit(f'RED baseline invalid: tests did not finish, discovered={sum(counts)}')
           # GameTestRegistry lowercases camelCase test names, and its
           # required failures use "failed!" while optional failures use
@@ -173,7 +173,7 @@ jobs:
           chmod +x ./gradlew
           set -o pipefail
           ./gradlew --no-daemon --stacktrace runGameTestServer 2>&1 | tee gametest-console.log
-      - name: Assert that all 19 registered GameTests really ran
+      - name: Assert that all 20 registered GameTests really ran
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -181,8 +181,8 @@ jobs:
           text = Path('gametest-console.log').read_text(errors='replace')
           counts = [int(x) for x in re.findall(r"Running test batch '[^']+' \((\d+) tests\)", text)]
           discovered = sum(counts)
-          if discovered < 19:
-              raise SystemExit(f'Expected at least 19 SSN GameTests, found {discovered}; batch counts: {counts}')
+          if discovered < 20:
+              raise SystemExit(f'Expected at least 20 SSN GameTests, found {discovered}; batch counts: {counts}')
           if not re.search(r'GAME TESTS COMPLETE', text):
               raise SystemExit('GameTest completion summary missing; Minecraft may not have run the tests')
           if not re.search(r'All \d+ required tests passed', text):
