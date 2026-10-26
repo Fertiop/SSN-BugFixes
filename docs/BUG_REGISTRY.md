@@ -1,52 +1,90 @@
-# SSN 1.13.2 — error and investigation registry
+# SSN 1.13.2 — единый реестр ошибок
 
-**Scope:** Minecraft 1.20.1 / Forge 47.x / SSN 1.13.2. **Date opened:** 2026-10-26.
+**Дата:** 2026-10-26. **Среда:** Minecraft 1.20.1 / Forge 47.3.0 / SSN 1.13.2 / FLib 0.0.16 / Java 17.
 
-Important: these are SSN's own behavior paths, **not Factotum ↔ SSN compatibility reports**. No runtime tests or local rebuild have been performed in this repository. Do not mark as fixed without evidence.
+**Это ошибки самого SSN**, не Factotum ↔ SSN. Исправления изолированы в [Draft PR #1](https://github.com/Fertiop/SSN-BugFixes/pull/1), ветка `fix/ssn-001-002-source-patches`, а не в `main`.
 
-| ID | Area | Status | Risk | Next check |
-|---|---|---|---|---|
-| SSN-001 | TileRequest serialisation | static-confirmed | Stored network link may be missing after reload | Save/reload with and without network refresh |
-| SSN-002 | ItemBuilder tooltip | static-confirmed, conditional | NPE when tooltip receives a null Level | Validate null-argument contract and reproduction |
-| SSN-003 | Duplicate-target cable selection | hypothesis / code path confirmed | Priority/filter of second cable can be ignored | Determine intended dedup semantics; test differing priorities |
-| SSN-004 | Builder remote block placement | hypothesis / code path confirmed | Block placed even if final item extraction fails | Reproduce simulate/execute divergence |
-| SSN-005 | Crafting ingredient remainder | upstream report, unverified in 1.13.2 | Possible item loss on shift-crafting | Reproduce on 1.13.2; compare upstream versions |
-| SSN-006 | Network list enumeration exception | static-confirmed code path, impact unmeasured | Failure of one storage stops enumeration of later storages | Test one faulty handler among valid handlers |
+## Сводка
 
-## SSN-001 — TileRequest saveAdditional does not save base connectable capability
-- **Location:** [TileRequest.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/block/request/TileRequest.java) / [TileConnectable.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/block/TileConnectable.java).
-- **Observation:** `TileRequest.saveAdditional(CompoundTag)` writes sorting and UI values without `super.saveAdditional(compound)`; parent serializes `connectable` (including link to main controller). Child `load` does call `super.load`.
-- **Uncertainty:** The network may reconstruct the association on refresh; verify persistence consequences in game before choosing fix.
-- **Regression checks:** saved NBT contains inherited data; reload network without unexpected rebind or broken search.
+| ID | Дефект | Статус доказательств | Недостающая проверка |
+|---|---|---|---|
+| SSN-001 | Терминал не сохранял `connectable` NBT | **RED → GREEN + реальный save/stop/restart PASS** | Выгрузка чанков и миграция старых миров |
+| SSN-002 | Пульт разыменовывал `null Level` | **RED → GREEN + реальный клиентский tooltip PASS** | Интерактивное GUI/разные экраны |
+| SSN-003 | Кабель с меньшим приоритетом мог победить при дедупликации сундука | **RED → GREEN GameTest** | Дополнительные фильтры, двойные сундуки |
+| SSN-004 | Пульт устанавливал блок до реального списания | **RED → GREEN GameTests** | Специальные BlockState и сторонние инвентари |
+| SSN-005 | Массовый крафт заменял весь стак ингредиентов одним остатком | **RED → GREEN GameTest** | Полный инвентарь, другие рецепты |
+| SSN-006 | Исключение одного хранилища скрывало другие | **RED → GREEN GameTest** | Другие виды исключений и провайдеры |
+| SSN-007 | `extractStack` возвращал симулированный стак при нулевой реальной выдаче | **RED → GREEN GameTest** | Частичные/неправильные ответы сторонних handlers |
 
-## SSN-002 — ItemBuilder tooltip does not handle nullable Level
-- **Location:** [ItemBuilder.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/item/ItemBuilder.java) / [upstream issue #578](https://github.com/Lothrazar/Storage-Network/issues/578).
-- **Observation:** `appendHoverText` passes its world argument to `getBlockState`; `getBlockState` uses `level.holderLookup(...)` when the stack has stored block state.
-- **Trigger:** null Level *and* builder stack containing a `blockstate` tag. Not necessarily reached in vanilla GUI.
-- **Regression checks:** tooltip with null Level and with a real Level, including stack without saved block state.
+**Статус «RED → GREEN»** означает, что конкретная входная конфигурация воспроизведена и проходит после патча. Он **не означает**, что весь мод проверен со всеми другими модами или всеми возможными блоками и GUI. Реальный Forge-клиент и дисковое сохранение одного терминала уже прошли отдельные автоматические проверки.
 
-## SSN-003 — Same-inventory cable dedup precedes priority selection
-- **Location:** [NetworkModule.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/block/main/NetworkModule.java).
-- **Observation:** `getConnectableStorage` sorts cable positions, dedups same `canonicalTargetKey`, adds only the first to `HashSet`; `getSortedConnectableStorage` applies priority **after** dedup.
-- **Disproof to attempt:** dedup is intentional to prevent double counting or duplicate extraction. Confirm expected winner selection before calling it an error.
-- **Regression checks:** two link cables with different priorities/directions/filters pointing to one chest and either half of a double chest.
+## Происхождение
 
-## SSN-004 — Builder remote places before consuming material
-- **Location:** [ItemBuilder.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/item/ItemBuilder.java).
-- **Observation:** `request(..., true)` checks available item, `placeStateSafe` places a block, and only then `request(..., false)` executes; result is ignored.
-- **Uncertainty:** A divergence between simulation and execution must be demonstrated. Do not assume unconditional free placement.
-- **Regression checks:** capability that permits simulate but fails real extraction; concurrent mutation; block placement failure.
+- Оригинальный релизный JAR `SimpleStorageNetwork-1.20.1-1.13.2.jar` SHA-256 `1db6f5595e5edc255db6800de9e0e1aa8e01e10d79d1784d549d70eb2cf53012`.
+- Исходники: [`Lothrazar/Storage-Network`, `trunk/1.20.1@7f3573757b7585d9f98fac5f725fa1a9eb5db276`](https://github.com/Lothrazar/Storage-Network/tree/trunk/1.20.1).
+- GREEN с Mixin и оригинальный RED без Mixin: [GitHub Actions 40387833982](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40387833982).
+- Всего **20 GameTests** в GREEN, **10 обязательных исходных RED-сценариев**. Также **6 статических проверок** JAR — они подтверждают исходный байткод, но не являются тестами патчей.
+- Изолированные тестовые handlers специально вносят ошибки. Их Java-классы, а также шаблон `empty.nbt`, **исключены из выпускаемого JAR**.
 
-## SSN-005 — Crafting remainder on stackable ingredients
-- **Source:** [upstream issue #576](https://github.com/Lothrazar/Storage-Network/issues/576) was reported against SSN 1.12.2, not proven in 1.13.2.
-- **Next checks:** stackable recipe remainder; shift-click; vanilla comparator; find any intervening fix.
-- **Status:** external unverified report. Not a confirmed 1.13.2 defect.
+## SSN-001 — терминал не сохранял данные родительского блока
 
-## SSN-006 — getStacks aborts enumeration on one failing provider
-- **Location:** [NetworkModule.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/block/main/NetworkModule.java).
-- **Observation:** `try/catch` surrounds entire loop over storages in `getStacks(boolean)`; one provider exception skips all later providers in that invocation.
-- **Uncertainty:** Frequency and user-visible impact depend on external storage handlers. Confirm ordering and symptom before prioritizing.
-- **Regression checks:** faulty handler amid valid connected chests; no missing unrelated counts.
+**Первопричина:** `TileRequest.saveAdditional(CompoundTag)` записывает параметры интерфейса, не вызывая `TileConnectable.saveAdditional`, которое сохраняет `connectable` и вызывает vanilla superclass. `TileRequest.load` при этом вызывает `super.load`.
 
-## Recording an actual patch
-Each entry must also record: exact SSN source commit and release JAR hash; environment; minimum steps; root cause; rejected hypotheses; added fix files; before/after behavior; build and game-test result; rollback notes.
+**Патч:** `mixin/TileRequestSaveMixin.java` в конце метода вызывает настоящий `super.saveAdditional(tag)`, сохраняя UI-ключи и унаследованный NBT.
+
+**Проверка:** 2 GameTests на NBT и загрузку, включая legacy NBT без `connectable`; оба падали на исходном релизе в релевантном сценарии и проходят с патчем. **Новая проверка диска:** [Actions 40391586565](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40391586565): сервер Forge создал master и request, подключил их, сохранил и остановился; затем **в новом процессе JVM** после повторного старта прочитана прежняя область .mca. Сохранились `connectable.master` с координатами `(0,80,1)`, `connectable.self`, `autoFocus:0b`, `storagenetworkdir:1b`, `storagenetworkjei:1b`, `storagenetworksort:0`. Пройдено. Чанковая миграция и обычный пользовательский UI при этом не проверялись.
+
+## SSN-002 — nullable Level в строительном пульте
+
+**Первопричина:** `ItemBuilder.appendHoverText` передаёт необязательный `Level` в `ItemBuilder.getBlockState`, а тот вызывает `level.holderLookup(Registries.BLOCK)` без null guard при наличии `blockstate` NBT.
+
+**Патч:** `mixin/ItemBuilderNullLevelMixin.java`; возвращает null при `level == null`, не меняет настоящую загрузку BlockState. [Upstream #578](https://github.com/Lothrazar/Storage-Network/issues/578).
+
+**Проверка:** серверные GameTests с сохранённым BlockState, без NBT, с настоящим Level, baseline null-World падал с NPE. **Новая проверка настоящего клиента:** [Actions 40391860401](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40391860401): Minecraft с Forge 47.3.0 запускался на виртуальном дисплее с программным OpenGL; `ItemStack.getTooltipLines(null, TooltipFlag.Default.NORMAL)` и `ItemBuilder.appendHoverText(..., null, ...)` успешно прошли с сохранённым BlockState, также проверена подсказка без BlockState. Это клиентский код, но не визуальное взаимодействие с меню мышью.
+
+## SSN-003 — дедупликация раньше приоритета
+
+**Первопричина:** `NetworkModule.getConnectableStorage` сортирует позиции кабелей, выбирает первый `canonicalTargetKey` физического сундука; только затем `getSortedConnectableStorage` сортирует выбранные cap по приоритетам. Позиционно ранний кабель может фильтровать предметы при наличии кабеля с более высоким приоритетом.
+
+**Патч:** `mixin/NetworkPriorityDedupMixin.java`; сравнивает приоритет `IConnectableLink.getPriority` перед позиционным tie-breaker. Старый алгоритм **дедупликации сундука и двух половин double chest сохранён**. По API SSN меньшее числовое значение приоритета должно обрабатываться раньше.
+
+**Проверка:** исходная сеть показывала **0 вместо 7 алмазов**, с патчем тест проходит; независимый тест на отсутствие двойного подсчёта также проходит. Следует дополнительно проверить направления и фильтры двух половин double chest.
+
+## SSN-004 — строительный пульт размещал блок до расхода ресурса
+
+**Первопричина:** `ItemBuilder.useOn` вызывает `request(...,true)`, размещает блок, затем вызывает `request(...,false)`, игнорируя реальный результат. При расхождении стороннего `IItemHandler` симуляция могла разрешить бесплатный блок. Кроме того, SSN-007 скрывал факт неудачной выдачи.
+
+**Патч:** `mixin/ItemBuilderPaidPlacementMixin.java`; вместо исходного вызова размещения сначала снимает ресурс, вызывает оригинальную безопасную установку через Mixin Invoker, затем подавляет повторное списание. Если установка не удалась после списания, возвращает полученный предмет в инвентарь игрока, а если места нет — выбрасывает возле него. Не делает неограниченных повторных запросов к сети.
+
+**Проверка:** RED с провайдером, который разрешает simulate, но возвращает EMPTY на real extract; GREEN после обоих патчей SSN-004+007. Дополнительный required-тест моделирует занятие места блоком во время реального списания: списанный камень возвращается игроку. Положительный сценарий проверяет, что обычная установка снимает **ровно один** камень. Важное ограничение: экзотические обновления блоков и аварийные исключения сторонних модов могут требовать отдельных защит.
+
+## SSN-005 — потеря стакуемых ингредиентов с контейнерным остатком
+
+**Первопричина:** `ContainerNetwork.craftShift` при замене ингредиента остатком (например, банка/бутылочка) присваивал `matrix.setItem(i, remainder)` всему исходному стеку, не уменьшив его на единицу. Так терялись остальные ингредиенты. [Upstream #576](https://github.com/Lothrazar/Storage-Network/issues/576) относится к старой версии и сам по себе не был доказательством дефекта в 1.13.2.
+
+**Патч:** `mixin/NetworkCraftShiftRemainderMixin.java`; при входном стаке больше одного предмета сохраняет остальные `count-1` в сетке и возвращает остаток рецепта игроку/на землю. Для единственного ингредиента оставляет исходную логику.
+
+**Проверка:** ванильный рецепт 2×2 медовых бутылочек с `2` бутылочками в каждой ячейке. RED в 1.13.2: `8 honey bottles -> 1 honey block + 4 glass bottles + 0 unused honey`, четыре бутылочки отсутствовали. GREEN с патчем соблюдает баланс потребления и остатков. Дополнительный положительный GameTest обычного рецепта 4×1 также прошёл. Первая версия теста ошибочно пользовалась унаследованным `NetworkCraftingInventory.getItems()`; это исправлено, проверяется именно `getItem(i)`, включая предметы на земле.
+
+## SSN-006 — одно неисправное хранилище прерывало обход всей сети
+
+**Первопричина:** общий `try/catch` находится *снаружи* цикла по хранилищам в `NetworkModule.getStacks` и `getSortedStacks`. Исключение при чтении одного `IItemHandler` обрывает все последующие чтения.
+
+**Патч:** `mixin/NetworkReadIsolationMixin.java`; локально перехватывает вызов `IConnectableLink.getStoredStacks` в обоих методах, возвращает пустой список только для неработающего источника и продолжает обход. Не повторяет рискованную операцию.
+
+**Проверка:** намеренно бросающий исключение `ThrowingChestBlockEntity` скрывал **7 алмазов** в соседнем нормальном сундуке при RED; в GREEN соседнее хранилище читается. Исходное исключение при тестировании намеренное.
+
+## SSN-007 — фантомный результат реального извлечения
+
+**Первопричина:** `CapabilityConnectableLink.extractStack` создаёт `firstMatchedStack` из `extractItem(...,true)`. При `extractItem(...,false) == EMPTY` переменная `extractCount` равна нулю; оригинал **всё равно возвращает `firstMatchedStack`** с симулированным размером. Из-за этого даже списание *до* установки блока не гарантировало сохранность ресурсов.
+
+**Патч:** `mixin/CapabilityLinkCommittedExtractionMixin.java`; при нулевом подтверждённом реальном извлечении возвращает `ItemStack.EMPTY`, при ненулевом — точный извлечённый размер. Сохраняет направление, фильтры, проверку matcher и обход слотов SSN. Из-за корректировки нескольких строк оригинальной логики потребовался ограниченный `@Overwrite` метода, без перепаковки класса/мода.
+
+**Проверка:** GameTest `ssn_004_request_must_not_report_simulation_as_real_debit`; оригинал возвращал фантомный камень при реальном EMPTY, патч возвращает EMPTY. Помимо SSN-004, это влияет на остальные обращения к сети через `request`.
+
+## Перед публичным релизом
+
+- [x] Сохранение на диск и полный **save → stop → restart** выделенного Forge-сервера: `connectable` и UI-состояние терминала совпадают.
+- [x] Проверить клиентский путь **ItemStack.getTooltipLines(null)** на настоящем Forge-клиенте. [ ] Остаётся визуальный интерактивный GUI.
+- Пройти **дополнительные инварианты ресурсов/NBT** на сторонних inventories, полном инвентаре и сложных рецептах.
+- Повторить свежий CI на актуальном head, изучить логи, сохранить резервную копию и только затем рассматривать выпуск.

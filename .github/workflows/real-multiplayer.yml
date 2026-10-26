@@ -1,0 +1,75 @@
+name: Real Forge client-server multiplayer compatibility
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  real-client-server-join:
+    runs-on: ubuntu-latest
+    timeout-minutes: 29
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install software graphics and X11 virtual display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgl1 libgl1-mesa-dri libasound2t64
+      - name: Pre-fetch Minecraft assets with retries (network-only failures)
+        run: |
+          chmod +x ./gradlew
+          for attempt in 1 2 3; do
+            if ./gradlew --no-daemon --console=plain downloadAssets; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Minecraft asset downloads failed after 3 attempts"
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
+      - name: Actual Minecraft 1.20.1 client joins Forge SSN dedicated server
+        run: |
+          chmod +x ./gradlew
+          python -u tests/integration/real_multiplayer_smoke.py
+      - name: Confirm real remote player joined and terminal remained connected
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          marker=Path('build/persistence-smoke/multiplayer-join-passed.txt')
+          if not marker.exists() or 'PASS: real Forge' not in marker.read_text():
+              raise SystemExit('Missing real-player/Forge-protocol login proof')
+          gui=Path('run-client-join/multiplayer-gui-opened.txt')
+          if not gui.exists() or 'PASS:' not in gui.read_text():
+              raise SystemExit('Real SSN menu-open proof missing')
+          print(marker.read_text())
+          print(gui.read_text())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ssn-real-client-server-evidence
+          path: |
+            build/persistence-smoke/server-multiplayer.log
+            build/persistence-smoke/client-join.log
+            build/persistence-smoke/multiplayer-join-passed.txt
+            run-client-join/multiplayer-gui-opened.txt
+            run/logs/
+            run/crash-reports/
+            run-client-join/logs/
+            run-client-join/crash-reports/
+          if-no-files-found: ignore

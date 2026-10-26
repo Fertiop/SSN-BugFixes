@@ -1,0 +1,43 @@
+name: SSN 1.13.2 GameTests (manual)
+
+# Deliberately not run on push or PR: Forge GameTests start Minecraft.
+# Run only after project owner approves build / test execution.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gametests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout requested revision
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Check Java version
+        run: java -version
+      - name: Grant Gradle wrapper execute permission
+        run: chmod +x gradlew
+      - name: Compile real SSN integration and Mixin patches
+        run: ./gradlew --no-daemon compileJava
+      - name: Dedicated Forge GameTests
+        run: ./gradlew --no-daemon runGameTestServer
+      - name: Preserve logs and results even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssn-gametest-logs
+          if-no-files-found: warn
+          path: |
+            run/logs/**
+            run/crash-reports/**
+            build/test-results/**
+            build/reports/**

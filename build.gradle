@@ -1,8 +1,19 @@
+buildscript {
+    repositories {
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7.38'
+    }
+}
+
 plugins {
     id 'eclipse'
     id 'idea'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
 }
+
+apply plugin: 'org.spongepowered.mixin'
 
 version = mod_version
 group = mod_group_id
@@ -21,6 +32,9 @@ minecraft {
         configureEach {
             workingDirectory project.file('run')
             property 'forge.logging.console.level', 'info'
+            property 'forge.enabledGameTestNamespaces', mod_id
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
 
             mods {
                 ssnbugfixes {
@@ -28,13 +42,53 @@ minecraft {
                 }
             }
         }
-        client {}
+        client {
+            // Real client tooltip smoke: only enabled in explicit CI launches.
+            if (project.hasProperty('ssnClientSmoke')) {
+                property 'ssnbugfixes.clientSmoke', 'true'
+            }
+            if (project.hasProperty('ssnClientJoin')) {
+                // One isolated real-client to dedicated-server smoke run.
+                // Minecraft 1.20.1 quick play is not the pre-1.20 legacy
+                // --server/--port command-line pair.
+                workingDirectory project.file('run-client-join')
+                args '--quickPlayMultiplayer', '127.0.0.1:25585'
+                property 'ssnbugfixes.clientJoinGui', 'true'
+            }
+        }
         server {}
+        gameTestServer {
+            property 'forge.enabledGameTestNamespaces', mod_id
+        }
+    }
+}
+
+repositories {
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
     }
 }
 
 dependencies {
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    // Original SSN 1.13.2, compile-only: never package third-party mod classes.
+    compileOnly fg.deobf('maven.modrinth:cVIr8Vz1:UmSTgKWE')
+    runtimeOnly fg.deobf('maven.modrinth:cVIr8Vz1:UmSTgKWE')
+    compileOnly fg.deobf('maven.modrinth:FAUSd09K:CDihtEoy')
+    // FLib is a mandatory runtime dependency of SSN; pin the tested 1.20.1 release.
+    runtimeOnly fg.deobf('maven.modrinth:FAUSd09K:CDihtEoy')
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+}
+
+mixin {
+    add sourceSets.main, 'ssnbugfixes.refmap.json'
+    // Test-only RED baseline: run the exact same GameTests against original
+    // SSN behavior. Normal builds/launches always enable the two patches.
+    if (!project.hasProperty('ssnBaseline')) {
+        config 'ssnbugfixes.mixins.json'
+    }
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -61,7 +115,11 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+// GameTests are compiled into the developer run configuration but must not
+// become executable classes in a player's distributable companion JAR.
 tasks.named('jar', Jar).configure {
+    exclude 'io/github/fertiop/ssnbugfixes/gametest/**'
+    exclude 'data/ssnbugfixes/structures/empty.nbt'
     manifest {
         attributes([
             'Specification-Title': mod_id,
@@ -69,7 +127,8 @@ tasks.named('jar', Jar).configure {
             'Specification-Version': '1',
             'Implementation-Title': project.name,
             'Implementation-Version': project.jar.archiveVersion,
-            'Implementation-Vendor': 'Fertiop'
+            'Implementation-Vendor': 'Fertiop',
+            'MixinConfigs': 'ssnbugfixes.mixins.json'
         ])
     }
     finalizedBy 'reobfJar'

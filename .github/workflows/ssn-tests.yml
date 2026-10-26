@@ -1,0 +1,243 @@
+name: SSN 1.13.2 regression tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_game_tests:
+        description: "Launch real Forge GameTest server (including expected-red optional probes)"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-bytecode-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download and verify exact upstream SSN 1.13.2 JAR
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import urllib.request
+
+          api = 'https://api.modrinth.com/v2/version/UmSTgKWE'
+          headers = {'User-Agent': 'Fertiop-SSN-BugFixes/0.1 (upstream bytecode tests)'}
+          def get(url):
+              return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30)
+          manifest = json.load(get(api))
+          binary = next(f for f in manifest['files'] if f['filename'] == 'SimpleStorageNetwork-1.20.1-1.13.2.jar')
+          data = get(binary['url']).read()
+          got = hashlib.sha256(data).hexdigest()
+          expected = '1db6f5595e5edc255db6800de9e0e1aa8e01e10d79d1784d549d70eb2cf53012'
+          if got != expected:
+              raise SystemExit(f'SSN artifact mismatch: expected {expected}, found {got}')
+          Path('ssn-1.13.2.jar').write_bytes(data)
+          print(f'Pinned original SSN JAR: {got}')
+          PY
+      - name: Run six baseline characterization checks
+        env:
+          SSN_JAR: ssn-1.13.2.jar
+        run: python -m unittest discover -s tests/static -p 'test_*.py' -v
+
+  forge-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile, generate mixin refmap and package
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace build
+      - name: Verify package contains MixinConfigs and generated refmap
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          jars = [p for p in Path('build/libs').glob('*.jar') if 'sources' not in p.name]
+          if len(jars) != 1:
+              raise SystemExit(f'Expected exactly one build JAR, got {jars}')
+          with ZipFile(jars[0]) as jar:
+              names = set(jar.namelist())
+              manifest = jar.read('META-INF/MANIFEST.MF').decode('utf-8')
+              assert 'MixinConfigs: ssnbugfixes.mixins.json' in manifest, manifest
+              assert 'ssnbugfixes.mixins.json' in names
+              assert 'ssnbugfixes.refmap.json' in names
+              assert not any(name.startswith('io/github/fertiop/ssnbugfixes/gametest/')
+                             for name in names), 'Test-only Java code leaked into production JAR'
+              assert 'data/ssnbugfixes/structures/empty.nbt' not in names, (
+                  'GameTest structure leaked into production JAR')
+          print('Mixin configuration present; GameTest classes/fixtures excluded from', jars[0])
+          PY
+      - name: Upload experimental test JAR (not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSN-BugFixes-EXPERIMENTAL-test-only
+          path: build/libs/*.jar
+          retention-days: 14
+          if-no-files-found: error
+
+  forge-expected-red:
+    needs: forge-build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Pre-fetch Minecraft assets with retries (network-only failures)
+        run: |
+          chmod +x ./gradlew
+          for attempt in 1 2 3; do
+            if ./gradlew --no-daemon --console=plain downloadAssets; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Minecraft asset downloads failed after 3 attempts"
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
+      - name: Run unpatched SSN baseline; required SSN-001/002 tests must FAIL
+        run: |
+          chmod +x ./gradlew
+          set +e
+          ./gradlew --no-daemon --stacktrace -PssnBaseline runGameTestServer > baseline-red.log 2>&1
+          game_exit=$?
+          set -e
+          echo "GameTest baseline Gradle exit status: $game_exit"
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          log = Path('baseline-red.log').read_text(errors='replace')
+          if '--mixin.config, ssnbugfixes.mixins.json' in log:
+              raise SystemExit('RED baseline invalid: our Mixin configuration is still active')
+          counts = [int(n) for n in re.findall(r"Running test batch '[^']+' \((\d+) tests\)", log)]
+          if sum(counts) < 21 or 'GAME TESTS COMPLETE' not in log:
+              raise SystemExit(f'RED baseline invalid: tests did not finish, discovered={sum(counts)}')
+          # GameTestRegistry lowercases camelCase test names, and its
+          # required failures use "failed!" while optional failures use
+          # "failed.". Normalize both instead of confusing format with GREEN.
+          failed = {name.lower() for name in re.findall(
+              r'LogTestReporter\]: (?:\(optional\) )?([\w]+) failed[!.]', log)}
+          expected_red = {
+              'requestTerminalSavesInheritedConnection',
+              'ssn_001_request_saves_connectable_and_ui_fields',
+              'builderReturnsNullWithoutWorldEvenWithSavedState',
+              'ssn_002_null_level_with_saved_blockstate',
+              'ssn_003_higher_priority_duplicate_link_wins_filter',
+              'ssn_004_no_free_block_on_failed_extraction',
+              'ssn_004_failed_placement_refunds_consumed_stone',
+              'ssn_004_request_must_not_report_simulation_as_real_debit',
+              'ssn_005_stackable_honey_bottle_remainder_conservation',
+              'ssn_005_full_player_inventory_preserves_crafting_remainders',
+              'ssn_006_failure_in_one_provider_keeps_other_items_visible',
+          }
+          expected_red = {name.lower() for name in expected_red}
+          missing = expected_red - failed
+          unexpected = failed - expected_red
+          if missing or unexpected:
+              raise SystemExit(f'RED baseline invalid: missing expected {sorted(missing)}; unrelated failures {sorted(unexpected)}; all failures {sorted(failed)}')
+          if not any('required tests failed' in x.lower() for x in log.splitlines()):
+              raise SystemExit('RED baseline invalid: expected required-test failures were not reported')
+          print(f'Confirmed {len(expected_red)} original RED cases: {sorted(expected_red)}')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ssn-original-red-baseline
+          path: |
+            baseline-red.log
+            run/logs/
+            run/crash-reports/
+          if-no-files-found: ignore
+
+  forge-gametests:
+    needs: forge-build
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_game_tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Pre-fetch Minecraft assets with retries (network-only failures)
+        run: |
+          chmod +x ./gradlew
+          for attempt in 1 2 3; do
+            if ./gradlew --no-daemon --console=plain downloadAssets; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Minecraft asset downloads failed after 3 attempts"
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
+      - name: Run in-world tests with real SSN and FLib
+        run: |
+          chmod +x ./gradlew
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace runGameTestServer 2>&1 | tee gametest-console.log
+      - name: Assert that all 21 registered GameTests really ran
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path('gametest-console.log').read_text(errors='replace')
+          counts = [int(x) for x in re.findall(r"Running test batch '[^']+' \((\d+) tests\)", text)]
+          discovered = sum(counts)
+          if discovered < 21:
+              raise SystemExit(f'Expected at least 21 SSN GameTests, found {discovered}; batch counts: {counts}')
+          if not re.search(r'GAME TESTS COMPLETE', text):
+              raise SystemExit('GameTest completion summary missing; Minecraft may not have run the tests')
+          if not re.search(r'All \d+ required tests passed', text):
+              raise SystemExit('Required GameTests did not report success')
+          if re.search(r'\(optional\) \w+ failed\.', text) or re.search(
+                  r'\b[1-9]\d* optional tests failed', text):
+              raise SystemExit('GREEN run still reported optional failures')
+          if '20 required tests failed' in text:
+              raise SystemExit('Required checks failed')
+          print(f'GREEN: {discovered} tests discovered, all required passed, zero optional failures')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ssn-gametest-logs
+          path: |
+            run/logs/
+            run/crash-reports/
+            build/reports/
+            gametest-console.log
+          if-no-files-found: ignore

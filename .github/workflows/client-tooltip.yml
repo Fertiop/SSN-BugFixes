@@ -1,0 +1,74 @@
+name: Minecraft client tooltip smoke (real client)
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  client-tooltip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 23
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Ensure virtual X11 display and software OpenGL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgl1 libgl1-mesa-dri libasound2t64
+      - name: Pre-fetch Minecraft assets with retries (network-only failures)
+        run: |
+          chmod +x ./gradlew
+          for attempt in 1 2 3; do
+            if ./gradlew --no-daemon --console=plain downloadAssets; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Minecraft asset downloads failed after 3 attempts"
+              exit 1
+            fi
+            sleep "$((attempt * 10))"
+          done
+      - name: Start real Minecraft client and exercise ItemStack tooltip
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          chmod +x ./gradlew
+          timeout --signal=TERM 840s xvfb-run -a -s '-screen 0 1280x800x24' \
+            ./gradlew --no-daemon --console=plain -PssnClientSmoke runClient \
+            2>&1 | tee client-smoke-console.log
+      - name: Assert real-client tooltip completion marker and no failure
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          marker = Path('run/client-tooltip-smoke-ok.txt')
+          if not marker.is_file():
+              raise SystemExit('No real-client tooltip PASS marker; Minecraft did not complete the check')
+          content = marker.read_text()
+          if 'PASS' not in content:
+              raise SystemExit(f'Tooltip test marker incorrect: {content!r}')
+          log = Path('client-smoke-console.log').read_text(errors='replace')
+          if 'SSN_CLIENT_TOOLTIP_SMOKE PASS' not in log or 'SSN_CLIENT_TOOLTIP_SMOKE FAIL' in log:
+              raise SystemExit('Client log missing PASS or includes FAIL')
+          print('Real Minecraft client ItemStack.getTooltipLines(null) verified')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ssn-client-tooltip-smoke-logs
+          path: |
+            client-smoke-console.log
+            run/client-tooltip-smoke-ok.txt
+            run/logs/
+            run/crash-reports/
+          if-no-files-found: ignore
