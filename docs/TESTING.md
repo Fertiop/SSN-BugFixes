@@ -40,3 +40,7 @@ GameTest нормализует camelCase в нижний регистр; соо
 ## Запуск в GitHub
 
 Основной workflow `.github/workflows/ssn-tests.yml` автоматически выполняется для PR. Ручной `.github/workflows/gametest-manual.yml` запускается через GitHub Actions → SSN 1.13.2 GameTests (manual) → Run workflow. Не считать выходной код 0 доказательством без записей об обнаружении 20 GameTests, списке исходных RED и отсутствии незапланированных отказов.
+
+## Готовая экспериментальная сборка
+
+В успешном GitHub Actions job `forge-build` доступен ZIP-артефакт `SSN-BugFixes-EXPERIMENTAL-test-only` (14 дней). Он содержит только собранный companion JAR. Используйте для клиентского испытания в *копии* мира, рядом с оригинальным SSN 1.13.2 и FLib. Никогда не путайте CI-артефакт с опубликованным релизом.
