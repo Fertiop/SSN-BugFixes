@@ -39,9 +39,10 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
 import java.util.List;
 
 /**
- * Optional ("known red") tests of real unresolved SSN behaviors.
- * A failure here must be investigated; it does not block the verified
- * SSN-001/002 patch tests. Never report these cases as fixed by this PR.
+ * Behavioral regression tests for SSN's edge-case bugs. Every case is now
+ * required in GREEN runs, because a specific original-SSN RED and
+ * SSN-BugFixes GREEN have been demonstrated in Forge GameTests.
+ * Original stock SSN must still be tested in a separate baseline run.
  */
 @GameTestHolder(SsnBugFixes.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -58,7 +59,7 @@ public final class SsnExploratoryGameTests {
      * higher-priority cable, not depend on the cable's coordinates.
      * Optional until priority semantics are confirmed with the owner.
      */
-    @GameTest(template = "empty", timeoutTicks = 80, required = false)
+    @GameTest(template = "empty", timeoutTicks = 80)
     public static void ssn_003_higher_priority_duplicate_link_wins_filter(GameTestHelper helper) {
         TileMain main = basicNetwork(helper);
         ((ChestBlockEntity) helper.getBlockEntity(CHEST))
@@ -109,7 +110,7 @@ public final class SsnExploratoryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 80, required = false)
+    @GameTest(template = "empty", timeoutTicks = 80)
     public static void ssn_004_no_free_block_on_failed_extraction(GameTestHelper helper) {
         TileMain main = basicNetwork(helper);
         BlockPos chestPos = helper.absolutePos(CHEST);
@@ -237,7 +238,7 @@ public final class SsnExploratoryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 80, required = false)
+    @GameTest(template = "empty", timeoutTicks = 80)
     public static void ssn_005_stackable_honey_bottle_remainder_conservation(GameTestHelper helper) {
         // Vanilla HONEY_BOTTLE is stackable and returns GLASS_BOTTLE. This
         // reproduces the category without requiring Farmer's Delight.
@@ -293,7 +294,7 @@ public final class SsnExploratoryGameTests {
         helper.succeed();
     }
 
-    @GameTest(template = "empty", timeoutTicks = 80, required = false)
+    @GameTest(template = "empty", timeoutTicks = 80)
     public static void ssn_006_failure_in_one_provider_keeps_other_items_visible(GameTestHelper helper) {
         TileMain main = basicNetwork(helper);
         BlockPos chestPos = helper.absolutePos(CHEST);

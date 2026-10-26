@@ -129,8 +129,6 @@ jobs:
               'ssn_001_request_saves_connectable_and_ui_fields',
               'builderReturnsNullWithoutWorldEvenWithSavedState',
               'ssn_002_null_level_with_saved_blockstate',
-          }
-          optional = {
               'ssn_003_higher_priority_duplicate_link_wins_filter',
               'ssn_004_no_free_block_on_failed_extraction',
               'ssn_004_failed_placement_refunds_consumed_stone',
@@ -139,14 +137,13 @@ jobs:
               'ssn_006_failure_in_one_provider_keeps_other_items_visible',
           }
           expected_red = {name.lower() for name in expected_red}
-          optional = {name.lower() for name in optional}
           missing = expected_red - failed
-          unexpected = failed - expected_red - optional
+          unexpected = failed - expected_red
           if missing or unexpected:
               raise SystemExit(f'RED baseline invalid: missing expected {sorted(missing)}; unrelated failures {sorted(unexpected)}; all failures {sorted(failed)}')
           if not any('required tests failed' in x.lower() for x in log.splitlines()):
               raise SystemExit('RED baseline invalid: expected required-test failures were not reported')
-          print(f'Confirmed original RED behavior: {sorted(expected_red)}; other optional known-red probes: {sorted(failed & optional)}')
+          print(f'Confirmed {len(expected_red)} original RED cases: {sorted(expected_red)}')
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -189,7 +186,12 @@ jobs:
               raise SystemExit('GameTest completion summary missing; Minecraft may not have run the tests')
           if not re.search(r'All \d+ required tests passed', text):
               raise SystemExit('Required GameTests did not report success')
-          print(f'Verified: {discovered} GameTests discovered and all required checks passed')
+          if re.search(r'\(optional\) \w+ failed\.', text) or re.search(
+                  r'\b[1-9]\d* optional tests failed', text):
+              raise SystemExit('GREEN run still reported optional failures')
+          if '20 required tests failed' in text:
+              raise SystemExit('Required checks failed')
+          print(f'GREEN: {discovered} tests discovered, all required passed, zero optional failures')
           PY
       - uses: actions/upload-artifact@v4
         if: always()
