@@ -6,20 +6,26 @@ Important: these are SSN's own behavior paths, **not Factotum ↔ SSN compatibil
 
 | ID | Area | Status | Risk | Next check |
 |---|---|---|---|---|
-| SSN-001 | TileRequest serialisation | static-confirmed | Stored network link may be missing after reload | Save/reload with and without network refresh |
-| SSN-002 | ItemBuilder tooltip | static-confirmed, conditional | NPE when tooltip receives a null Level | Validate null-argument contract and reproduction |
+| SSN-001 | TileRequest serialisation | fixed-unverified (source patch) | Stored network link may be missing after reload | Save/reload with and without network refresh |
+| SSN-002 | ItemBuilder tooltip | fixed-unverified (source patch) | NPE when tooltip receives a null Level | Validate null-argument contract and reproduction |
 | SSN-003 | Duplicate-target cable selection | hypothesis / code path confirmed | Priority/filter of second cable can be ignored | Determine intended dedup semantics; test differing priorities |
 | SSN-004 | Builder remote block placement | hypothesis / code path confirmed | Block placed even if final item extraction fails | Reproduce simulate/execute divergence |
 | SSN-005 | Crafting ingredient remainder | upstream report, unverified in 1.13.2 | Possible item loss on shift-crafting | Reproduce on 1.13.2; compare upstream versions |
 | SSN-006 | Network list enumeration exception | static-confirmed code path, impact unmeasured | Failure of one storage stops enumeration of later storages | Test one faulty handler among valid handlers |
 
 ## SSN-001 — TileRequest saveAdditional does not save base connectable capability
+- **Patch candidate:** `src/main/java/io/github/fertiop/ssnbugfixes/mixin/TileRequestSaveMixin.java`; `@Inject` at `saveAdditional` TAIL invokes `super.saveAdditional(tag)`.
+- **Candidate status:** `fixed-unverified`; **no build, Minecraft execution or red-green regression validation**. Verify remapping of the inherited vanilla method to `m_183515_` in production; see `docs/TEST_CASES.md`.
+
 - **Location:** [TileRequest.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/block/request/TileRequest.java) / [TileConnectable.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/block/TileConnectable.java).
 - **Observation:** `TileRequest.saveAdditional(CompoundTag)` writes sorting and UI values without `super.saveAdditional(compound)`; parent serializes `connectable` (including link to main controller). Child `load` does call `super.load`.
 - **Uncertainty:** The network may reconstruct the association on refresh; verify persistence consequences in game before choosing fix.
 - **Regression checks:** saved NBT contains inherited data; reload network without unexpected rebind or broken search.
 
 ## SSN-002 — ItemBuilder tooltip does not handle nullable Level
+- **Patch candidate:** `src/main/java/io/github/fertiop/ssnbugfixes/mixin/ItemBuilderNullLevelMixin.java`; null `Level` returns null; non-null delegates to SSN.
+- **Candidate status:** `fixed-unverified`; **no build or test execution**. See `docs/TEST_CASES.md`.
+
 - **Location:** [ItemBuilder.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/item/ItemBuilder.java) / [upstream issue #578](https://github.com/Lothrazar/Storage-Network/issues/578).
 - **Observation:** `appendHoverText` passes its world argument to `getBlockState`; `getBlockState` uses `level.holderLookup(...)` when the stack has stored block state.
 - **Trigger:** null Level *and* builder stack containing a `blockstate` tag. Not necessarily reached in vanilla GUI.
@@ -50,3 +56,9 @@ Important: these are SSN's own behavior paths, **not Factotum ↔ SSN compatibil
 
 ## Recording an actual patch
 Each entry must also record: exact SSN source commit and release JAR hash; environment; minimum steps; root cause; rejected hypotheses; added fix files; before/after behavior; build and game-test result; rollback notes.
+
+## 2026-10-26 source-patch investigation provenance
+- Provided SSN JAR SHA-256: `1db6f5595e5edc255db6800de9e0e1aa8e01e10d79d1784d549d70eb2cf53012` (matched by fresh byte inspection).
+- Upstream code baseline: `Lothrazar/Storage-Network` `trunk/1.20.1@7f3573757b7585d9f98fac5f725fa1a9eb5db276`.
+- Bytecode confirmed: `TileRequest.m_183515_` lacks parent `TileConnectable.m_183515_` call, `ItemBuilder.getBlockState` dereferences null `Level` when item has `blockstate`.
+- Patches are isolated on branch `fix/ssn-001-002-source-patches`; do not merge/release before verification.
