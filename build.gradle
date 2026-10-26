@@ -53,6 +53,7 @@ minecraft {
                 // --server/--port command-line pair.
                 workingDirectory project.file('run-client-join')
                 args '--quickPlayMultiplayer', '127.0.0.1:25585'
+                property 'ssnbugfixes.clientJoinGui', 'true'
             }
         }
         server {}
