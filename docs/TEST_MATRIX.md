@@ -1,58 +1,30 @@
-# SSN 1.13.2: acceptance / regression matrix
+# Матрица проверок SSN 1.13.2
 
-**Last verified game run:** [Actions 40365724004](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40365724004), commit `f92be520`: 15 GameTests ran, 12 required passed, three optional failed **for their intended defect assertions**, not from broken fake player. SSN-004 free block placement and SSN-006 missing healthy chest stock reproduced with test-only divergent/throwing capabilities. SSN-005 initially showed lost items, **but the test incorrectly used inherited `NetworkCraftingInventory.getItems()`**; corrected to enumerate `getItem(slot)` and account for dropped items. A control assertion for recipe remainders was added. **SSN-005 reproduced on corrected test** in [Actions 40378602235](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40378602235): 8 honey bottles -> 1 block + 4 glass + 0 unused honey, no nearby drops; four honey bottles unaccounted for. Further vanilla-control and menu-close comparisons are still useful. Optional SSN-003 priority-and-filter probe **failed for the expected observation** in [Actions 40378719501](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40378719501): 7 diamonds present, high-priority link unfiltered, low-priority link filters them, 0 visible. Confirms configured priority did not win in this same-inventory case; intended policy remains under review. 16 cases executed (12 required green, 4 optional expected-red). New-head CI remains under verification. Six JAR bytecode baseline checks pass and Forge build was verified, but live-world restart/client UI acceptance is not yet done.
+**Результат GREEN:** [Actions 40380365809](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40380365809): **18 GameTests**, **14 обязательных прошли**, **4 необязательных провалились по предполагаемым дефектам**. Сборка и проверка пакета Mixin прошли. Прошли и 6 SHA-256-закреплённых проверок исходного JAR.
 
+**RED-результат:** [Actions 40380161104](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40380161104): четыре SSN-001/002 теста провалились на оригинальном SSN без Mixin с правильной первопричиной. Анализатор GitHub Actions первоначально ошибочно не распознал имена с нижним регистром и обязательное `failed!`. Исправлен; полноценный повторный CI-результат ожидает проверки.
 
+| ID | Автоматизированный сценарий | Результат и статус |
+|---|---|---|
+| SSN-001 | Настоящий `TileRequest`, `connectable.master`, настройки UI, NBT roundtrip; отсутствие inherited tag в старом сохранении | 2 обязательных проходят с патчем, оба RED на исходном SSN; дисковый рестарт ещё нужен |
+| SSN-002 | `ItemBuilder.getBlockState(null, stack)` с/без NBT, реальный уровень с блоком, базовые регрессии | 5 обязательных проходят; 2 RED на исходном SSN; клиентская tooltip-проверка остаётся |
+| SSN-003 | Один сундук / два storage-кабеля: без двойного счёта; затем высокий приоритет без фильтра и низкий приоритет с фильтром | 1 обязательный прошёл, 1 необязательный воспроизвёл видимость 0 вместо 7; уточнить официальную политику победителя |
+| SSN-004 | Честное размещение списывает 1 камень; `simulate` допускает, а реальная выдача отказывает | Положительный обязательный тест прошёл; необязательный обнаружил бесплатный блок при расходовании 0 |
+| SSN-005 | Один мёд в четырёх ячейках; два мёда в четырёх ячейках; ванильный рецепт возвращает 4 бутылки | Положительный обязательный тест прошёл; необязательный воспроизвёл 4 пропавшие неиспользованные бутылочки мёда. Подсчёт исправлен: `getItem(slot)` и выпавшие предметы вместо наследуемого `getItems()` |
+| SSN-006 | При исключении одного `IItemHandler` 7 алмазов во втором нормальном сундуке должны отображаться | Необязательный воспроизвёл невидимость исправного сундука; источник — широкая обработка исключения вокруг всего обхода |
+| Общие проверки | Остаток от полной/частичной вставки, инварианты NBT-предметов, отсутствие двойного счёта, симуляция против реальной операции | Обязательные проходят в GREEN |
+| Сборка | Mixin refmap / manifest, отсутствие в JAR тестовых классов и `empty.nbt` | Прошло в GitHub Actions |
 
-## Test disciplines
+## Что ещё НЕ доказано
 
-- **RED:** disable the corresponding Mixin in a baseline copy, run identical setup, check a *specific expected failure* rather than a crash unrelated to the defect.
-- **GREEN:** re-enable the single patch, repeat with identical inventory and world, require success.
-- **REGRESSION:** repeat with two terminals, double chests, storage direction filters, stale caches, NBT metadata, server and client as applicable.
-- **Conservation:** snapshot complete `ItemStack` identity (**registry key + components/NBT + count**) in every participating inventory, network link, player inventory, dropped entity, craft remainder and output. For a pure transfer, counts per item+NBT must be identical before and after. For crafting, use ingredient->output + remaining-item recipe expectations rather than raw totals. Never use a display cache as ground truth.
-- **Exceptions and abort:** inject controlled failure in a sandbox handler. If an operation may partially commit, don't blindly retry, restore or assume atomicity. Assert the true inventory states.
-- **Clean room:** run baseline with SSN/FLib/Forge and a tiny synthetic test fixture only; repeat with a normal modpack for compatibility. Do not report external-handler bugs as SSN bugs without proof.
+- Реальное дисковое сохранение мира с закрытием и повторным запуском.
+- Работа клиентской GUI-подсказки пульта во всех контекстах.
+- Крафт предметов с другими рецептами/NBT и полным инвентарём; взаимодействие с внешними модами.
+- SSN-003: является ли игнорирование второго кабеля ошибкой по замыслу автора при поддержке дедупликации.
+- Отсутствие потерь при исключениях, затронувших частично совершённые перемещения.
 
-| ID | Positive automated assertion | Negative / edge cases | Automation state |
-|---|---|---|---|
-| SSN-001 | `requestTerminalSavesInheritedConnection`: serialized `connectable.master` exists; native UI NBT retained; round-trip | old saves missing tag, chunk unload/load, sorting/JEI state, re-bind to second master | 2 GameTests passed in 13-test run; full restart pending |
-| SSN-002 | `builderReturnsNullWithoutWorldEvenWithSavedState` | no blockstate, real world+stone, actual client tooltip render | 5 GameTests passed in 13-test run; tooltip client test pending |
-| SSN-003 | Two links to one chest; winner honors *specified* priority if intentional; stock never counted twice | swap placement order/priority; same and different filters; double chest; opposite link directions; compare design intent | 1 required dedup check passed; 1 optional priority/filter conflict reproduced (0 vs 7 expected) in actual GameTest |
-| SSN-004 | Simulated extraction succeeds but real extraction fails: must not leave free placed block | unloaded main, unavailable inventory after simulation, survival vs creative, liquid, blocked target, special block states | 1 optional GameTest reached the fault assertion: SSN-004 reproduced; additional scenarios remain |
-| SSN-005 | Shift craft stackable ingredients with container remainder: expected output/remainder/remaining ingredients conserved | one-click and shift-click, full inventory, zero spare slots, mixed NBT, recipe differs, vanilla table comparator | 1 optional GameTest reached the fault assertion: SSN-004 reproduced; additional scenarios remain |
-| SSN-006 | If one linked handler throws, all healthy storage inventories still appear accurately | failing handler before/after good one, throw during count/snapshot, timeout or empty handler, unloaded chunk | 1 optional GameTest reproduced missing healthy chest items (Actions 40365724004) |
+## Границы доказательств
 
-## CI split
+Каждый красный исследовательский GameTest использует **настоящий SSN 1.13.2**, но SSN-004 и SSN-006 намеренно вводят неисправный сторонний `IItemHandler`. Это показывает условную возможность сбоя, **не частоту такого события в обычной игре**. SSN-005 использует ванильный рецепт медового блока и исправленный подсчёт реальных инвентарных ячеек и предметов на земле.
 
-1. **Static baseline validation:** 6 SHA-256-pinned SSN bytecode characterization tests (`tests/static/test_ssn_1132_bytecode.py`) verified locally; CI downloads the original JAR and reruns them. These tests characterize code paths, not patched behavior.
-2. **`./gradlew build`:** CI verifies Forge compilation, remapping and manifest/refmap packaging; all passed at commit 9c03cb26. No JUnit suite configured. Reverify latest head.
-3. **`./gradlew runGameTestServer`:** automatically runs on PRs after a passing Forge build, and can also run manually. Requires real SSN and FLib at runtime, not only compileOnly. Three unresolved defect reproductions have `required=false` and thus cannot be counted as green.
-4. **Client manual acceptance:** GUI/tooltips, normal placement and crafting matrix edge cases. Dedicated server cannot prove client-only tooltip rendering.
-5. **Release:** only publish a JAR if RED/GREEN verified, test logs retained, and no new item-loss risks.
-
-## Recorded automated test identifiers
-
-`SsnInitialRegressionTests.requestTerminalSavesInheritedConnection`
-`SsnInitialRegressionTests.builderReturnsNullWithoutWorldEvenWithSavedState`
-`SsnInitialRegressionTests.builderReturnsNullWithoutWorldAndWithoutSavedState`
-`SsnInitialRegressionTests.builderDecodesBlockStateWithRealWorld`
-
-All four original regression tests **passed** in Forge GameTests Actions run 40363459996, but RED baseline comparisons against unpatched SSN have **not** been executed. Do not claim formal red-green verification.
-
-## Additions (current experimental branch)
-
-- `SsnRegressionGameTests`: SSN-001 terminal NBT, SSN-002 null-Level with/without NBT, SSN-003 two links to one chest, SSN-004 normal simulated/actual item conservation, NBT-sensitive extraction, full/partial insertion conservation.
-- `SsnExploratoryGameTests`: optional known-red SSN-003 priority vs duplicate filter, SSN-004 free placement under divergent `IItemHandler`, SSN-005 honey-bottle shift-crafting remainder (with explicit control and drop accounting), SSN-006 earlier provider exception hiding later chest stock.
-- `DivergentChestBlockEntity`, `ThrowingChestBlockEntity`: synthetic failure providers used **only** by GameTests.
-- `src/main/resources/data/ssnbugfixes/structures/empty.nbt`: self-contained test structure.
-- `tests/static/test_ssn_1132_bytecode.py`: 6 checks executed locally against original JAR, 6/6 pass. Does **not** validate game behavior.
-
-**CI evidence:** early Gradle/Java test harness compilation failures were corrected; successful Forge build, refmap and 13 GameTests were verified on the original test branch SHA 9c03cb26. Further expanded 15-case run is pending; the workflow now fails unless at least 15 tests were actually discovered and all required tests passed.
-
-## Test packaging policy
-
-`build.gradle` excludes `io/github/fertiop/ssnbugfixes/gametest/**` and `data/ssnbugfixes/structures/empty.nbt` from the distributable JAR. Development GameTest runs still see these classes. CI inspects the built JAR and fails if any test-only bytecode or fixture leaks. This prevents intentional throwing inventory providers from becoming part of the shipped mod.
-
-## Interpreting the 16-case run
-
-Four optional exploratory probes can fail while the CI game-server job succeeds. CI must require >=16 registered tests, assert a completed GameTest summary and absence of required failures; **optional red is evidence of an unresolved defect, not of a repaired bug**. Stop deployment if either SSN-001 or SSN-002 required check fails. For SSN-003, if the competing-priority optional test fails, confirm intended user-visible priority semantics independently before adding a patch.
+Тестовые исходники существуют в dev-среде, но исключены из публикуемого JAR.
