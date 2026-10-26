@@ -4,7 +4,7 @@ import com.lothrazar.storagenetwork.api.DimPos;
 import com.lothrazar.storagenetwork.block.cable.link.TileCableLink;
 import com.lothrazar.storagenetwork.block.main.TileMain;
 import com.lothrazar.storagenetwork.block.request.ContainerNetworkCraftingTable;
-import com.lothrazar.storagenetwork.capability.CapabilityConnectableLink;
+import com.lothrazar.storagenetwork.api.IConnectableLink;
 import com.lothrazar.storagenetwork.item.ItemBuilder;
 import com.lothrazar.storagenetwork.registry.SsnRegistry;
 import com.lothrazar.storagenetwork.registry.StorageNetworkCapabilities;
@@ -122,9 +122,9 @@ public final class SsnExploratoryGameTests {
         TileCableLink healthyCable = (TileCableLink) helper.getBlockEntity(secondLink);
         healthyCable.setDirection(Direction.EAST);
         healthyCable.setChanged();
-        CapabilityConnectableLink brokenLink = brokenCable.getCapability(
+        IConnectableLink brokenLink = brokenCable.getCapability(
                 StorageNetworkCapabilities.CONNECTABLE_ITEM_STORAGE_CAPABILITY, null).orElse(null);
-        CapabilityConnectableLink healthyLink = healthyCable.getCapability(
+        IConnectableLink healthyLink = healthyCable.getCapability(
                 StorageNetworkCapabilities.CONNECTABLE_ITEM_STORAGE_CAPABILITY, null).orElse(null);
         helper.assertTrue(brokenLink != null && healthyLink != null, "Both storage links must exist");
         brokenLink.setPriority(-100);
