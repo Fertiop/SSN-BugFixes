@@ -90,6 +90,66 @@ jobs:
           print('Mixin configuration present; GameTest classes/fixtures excluded from', jars[0])
           PY
 
+  forge-expected-red:
+    needs: forge-build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run unpatched SSN baseline; required SSN-001/002 tests must FAIL
+        run: |
+          chmod +x ./gradlew
+          set +e
+          ./gradlew --no-daemon --stacktrace -PssnBaseline runGameTestServer > baseline-red.log 2>&1
+          game_exit=$?
+          set -e
+          echo "GameTest baseline Gradle exit status: $game_exit"
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          log = Path('baseline-red.log').read_text(errors='replace')
+          if '--mixin.config, ssnbugfixes.mixins.json' in log:
+              raise SystemExit('RED baseline invalid: our Mixin configuration is still active')
+          counts = [int(n) for n in re.findall(r"Running test batch '[^']+' \((\d+) tests\)", log)]
+          if sum(counts) < 16 or 'GAME TESTS COMPLETE' not in log:
+              raise SystemExit(f'RED baseline invalid: tests did not finish, discovered={sum(counts)}')
+          failed = set(re.findall(r'LogTestReporter/?:?\]: (?:\(optional\) )?([\w]+) failed\.', log))
+          expected_red = {
+              'requestTerminalSavesInheritedConnection',
+              'ssn_001_request_saves_connectable_and_ui_fields',
+              'builderReturnsNullWithoutWorldEvenWithSavedState',
+              'ssn_002_null_level_with_saved_blockstate',
+          }
+          optional = {
+              'ssn_003_higher_priority_duplicate_link_wins_filter',
+              'ssn_004_no_free_block_on_failed_extraction',
+              'ssn_005_stackable_honey_bottle_remainder_conservation',
+              'ssn_006_failure_in_one_provider_keeps_other_items_visible',
+          }
+          missing = expected_red - failed
+          unexpected = failed - expected_red - optional
+          if missing or unexpected:
+              raise SystemExit(f'RED baseline invalid: missing expected {sorted(missing)}; unrelated failures {sorted(unexpected)}; all failures {sorted(failed)}')
+          if not any('required tests failed' in x.lower() for x in log.splitlines()):
+              raise SystemExit('RED baseline invalid: expected required-test failures were not reported')
+          print(f'Confirmed original RED behavior: {sorted(expected_red)}; other optional known-red probes: {sorted(failed & optional)}')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ssn-original-red-baseline
+          path: |
+            baseline-red.log
+            run/logs/
+            run/crash-reports/
+          if-no-files-found: ignore
+
   forge-gametests:
     needs: forge-build
     if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_game_tests)
