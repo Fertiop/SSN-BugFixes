@@ -8,7 +8,7 @@ Important: these are SSN's own behavior paths, **not Factotum ↔ SSN compatibil
 |---|---|---|---|---|
 | SSN-001 | TileRequest serialisation | game-tested (save/load NBT), disk reload pending | Stored network link may be missing after reload | Save/reload with and without network refresh |
 | SSN-002 | ItemBuilder tooltip | game-tested null Level, client tooltip pending | NPE when tooltip receives a null Level | Validate null-argument contract and reproduction |
-| SSN-003 | Duplicate-target cable selection | hypothesis / code path confirmed | Priority/filter of second cable can be ignored | Determine intended dedup semantics; test differing priorities |
+| SSN-003 | Duplicate-target cable selection | reproduced (priority+filter conflict, game; intent review pending) | Priority/filter of second cable can be ignored | Determine intended dedup semantics; test differing priorities |
 | SSN-004 | Builder remote block placement | reproduced (divergent handler, game) | Block placed even if final item extraction fails | Reproduce simulate/execute divergence |
 | SSN-005 | Crafting ingredient remainder | reproduced (8 honey bottles, GameTest) | Possible item loss on shift-crafting | Reproduce on 1.13.2; compare upstream versions |
 | SSN-006 | Network list enumeration exception | reproduced (synthetic handler, game) | Failure of one storage stops enumeration of later storages | Test one faulty handler among valid handlers |
@@ -32,7 +32,7 @@ Important: these are SSN's own behavior paths, **not Factotum ↔ SSN compatibil
 - **Regression checks:** tooltip with null Level and with a real Level, including stack without saved block state.
 
 ## SSN-003 — Same-inventory cable dedup precedes priority selection
-- **Coverage:** required GameTest confirms a chest with two SSN links is counted once (17, not 34). Optional test `ssn_003_higher_priority_duplicate_link_wins_filter` now checks a higher-priority unfiltered link versus lower-priority filtered link targeting the same chest. Its result and intended winner semantics are not yet confirmed; do not conflate deliberate dedup with an error.
+- **Coverage:** required GameTest confirms a chest with two SSN links is counted once (17, not 34). Optional test `ssn_003_higher_priority_duplicate_link_wins_filter` now checks a higher-priority unfiltered link versus lower-priority filtered link targeting the same chest. [Actions 40378719501](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40378719501) executed 16 GameTests and **reproduced a conflicting-priority outcome:** 7 real diamonds, higher-priority unfiltered link, lower-priority filtered link, **0 diamonds visible**. This supports the code-path observation: same-chest links deduplicated before priority sorting. Intended behavior when two storage links share one chest still requires explicit policy review; keep the double-count protection.
 
 - **Location:** [NetworkModule.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/block/main/NetworkModule.java).
 - **Observation:** `getConnectableStorage` sorts cable positions, dedups same `canonicalTargetKey`, adds only the first to `HashSet`; `getSortedConnectableStorage` applies priority **after** dedup.
