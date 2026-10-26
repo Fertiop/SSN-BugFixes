@@ -101,7 +101,24 @@ jobs:
       - name: Run in-world tests with real SSN and FLib
         run: |
           chmod +x ./gradlew
-          ./gradlew --no-daemon --stacktrace runGameTestServer
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace runGameTestServer 2>&1 | tee gametest-console.log
+      - name: Assert that all 15 registered GameTests really ran
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path('gametest-console.log').read_text(errors='replace')
+          counts = [int(x) for x in re.findall(r"Running test batch '[^']+' \((\d+) tests\)", text)]
+          discovered = sum(counts)
+          if discovered < 15:
+              raise SystemExit(f'Expected at least 15 SSN GameTests, found {discovered}; batch counts: {counts}')
+          if not re.search(r'GAME TESTS COMPLETE', text):
+              raise SystemExit('GameTest completion summary missing; Minecraft may not have run the tests')
+          if not re.search(r'All \d+ required tests passed', text):
+              raise SystemExit('Required GameTests did not report success')
+          print(f'Verified: {discovered} GameTests discovered and all required checks passed')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -110,4 +127,5 @@ jobs:
             run/logs/
             run/crash-reports/
             build/reports/
+            gametest-console.log
           if-no-files-found: ignore
