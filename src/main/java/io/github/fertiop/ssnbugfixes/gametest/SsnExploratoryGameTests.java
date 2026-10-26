@@ -1,5 +1,6 @@
 package io.github.fertiop.ssnbugfixes.gametest;
 
+import io.netty.channel.embedded.EmbeddedChannel;
 import com.lothrazar.storagenetwork.api.DimPos;
 import com.lothrazar.storagenetwork.block.cable.link.TileCableLink;
 import com.lothrazar.storagenetwork.block.main.TileMain;
@@ -52,7 +53,7 @@ public final class SsnExploratoryGameTests {
 
         // The test provider advertises one STONE on simulation and refuses
         // the actual extraction. SSN must not place a free STONE block.
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = mockPlayerWithChannel(helper);
         BlockPos base = new BlockPos(1, 1, 3);
         helper.setBlock(base, Blocks.COBBLESTONE);
         BlockPos target = base.above();
@@ -79,7 +80,7 @@ public final class SsnExploratoryGameTests {
         helper.setBlock(request, SsnRegistry.Blocks.REQUEST.get());
         main.getNetwork().doRefresh(new DimPos(helper.getLevel(), helper.absolutePos(MASTER)));
 
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = mockPlayerWithChannel(helper);
         ContainerNetworkCraftingTable menu = new ContainerNetworkCraftingTable(
                 1, helper.getLevel(), helper.absolutePos(request), player.getInventory(), player);
 
@@ -138,6 +139,17 @@ public final class SsnExploratoryGameTests {
         helper.assertTrue(count == 7,
                 "SSN-006: a throwing provider hid 7 diamonds in an unrelated healthy chest");
         helper.succeed();
+    }
+
+    /**
+     * GameTest's fake server player has no Netty channel by default.
+     * Attach an in-memory channel so SSN menu packets / teleport sync can
+     * exercise real gameplay code instead of failing in the test harness.
+     */
+    private static ServerPlayer mockPlayerWithChannel(GameTestHelper helper) {
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        new EmbeddedChannel(player.connection.connection);
+        return player;
     }
 
     private static TileMain basicNetwork(GameTestHelper helper) {
