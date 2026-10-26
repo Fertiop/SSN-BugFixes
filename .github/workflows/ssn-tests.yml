@@ -1,0 +1,112 @@
+name: SSN 1.13.2 regression tests
+
+on:
+  push:
+    branches: [main, "fix/**", "test/**"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_game_tests:
+        description: "Launch real Forge GameTest server (including expected-red optional probes)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-bytecode-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download and verify exact upstream SSN 1.13.2 JAR
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import urllib.request
+
+          api = 'https://api.modrinth.com/v2/version/UmSTgKWE'
+          headers = {'User-Agent': 'Fertiop-SSN-BugFixes/0.1 (upstream bytecode tests)'}
+          def get(url):
+              return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30)
+          manifest = json.load(get(api))
+          binary = next(f for f in manifest['files'] if f['filename'] == 'SimpleStorageNetwork-1.20.1-1.13.2.jar')
+          data = get(binary['url']).read()
+          got = hashlib.sha256(data).hexdigest()
+          expected = '1db6f5595e5edc255db6800de9e0e1aa8e01e10d79d1784d549d70eb2cf53012'
+          if got != expected:
+              raise SystemExit(f'SSN artifact mismatch: expected {expected}, found {got}')
+          Path('ssn-1.13.2.jar').write_bytes(data)
+          print(f'Pinned original SSN JAR: {got}')
+          PY
+      - name: Run six baseline characterization checks
+        env:
+          SSN_JAR: ssn-1.13.2.jar
+        run: python -m unittest discover -s tests/static -p 'test_*.py' -v
+
+  forge-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile, generate mixin refmap and package
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace build
+      - name: Verify package contains MixinConfigs and generated refmap
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          jars = [p for p in Path('build/libs').glob('*.jar') if 'sources' not in p.name]
+          if len(jars) != 1:
+              raise SystemExit(f'Expected exactly one build JAR, got {jars}')
+          with ZipFile(jars[0]) as jar:
+              names = set(jar.namelist())
+              manifest = jar.read('META-INF/MANIFEST.MF').decode('utf-8')
+              assert 'MixinConfigs: ssnbugfixes.mixins.json' in manifest, manifest
+              assert 'ssnbugfixes.mixins.json' in names
+              assert 'ssnbugfixes.refmap.json' in names
+          print('Mixin config and refmap packaged in', jars[0])
+          PY
+
+  forge-gametests:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_game_tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run in-world tests with real SSN and FLib
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace runGameTestServer
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ssn-gametest-logs
+          path: |
+            run/logs/
+            run/crash-reports/
+            build/reports/
+          if-no-files-found: ignore
