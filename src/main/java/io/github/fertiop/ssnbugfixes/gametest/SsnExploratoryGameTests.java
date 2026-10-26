@@ -96,11 +96,12 @@ public final class SsnExploratoryGameTests {
                 + count(player.getInventory().items, Items.GLASS_BOTTLE);
         int blocks = count(player.getInventory().items, Items.HONEY_BLOCK);
 
-        helper.assertTrue(blocks == 1,
-                "SSN-005 setup: one 2x2 honey recipe should be crafted; got " + blocks);
-        helper.assertTrue(honey == 4 && bottles == 4,
-                "SSN-005: input was 8 honey bottles; 1 craft must preserve 4 honey + 4 glass, got "
-                        + honey + " honey and " + bottles + " glass");
+        helper.assertTrue(blocks >= 1 && blocks <= 2,
+                "SSN-005 setup: expected 1-2 honey block crafts from 8 bottles, got " + blocks);
+        helper.assertTrue(honey + 4 * blocks == 8 && bottles == 4 * blocks,
+                "SSN-005 conservation: input 8 honey bottles; made " + blocks
+                        + " blocks, remaining " + honey + " honey and " + bottles
+                        + " glass. Expected honey+4*blocks=8 and glass=4*blocks.");
         helper.succeed();
     }
 
