@@ -71,7 +71,11 @@ dependencies {
 
 mixin {
     add sourceSets.main, 'ssnbugfixes.refmap.json'
-    config 'ssnbugfixes.mixins.json'
+    // Test-only RED baseline: run the exact same GameTests against original
+    // SSN behavior. Normal builds/launches always enable the two patches.
+    if (!project.hasProperty('ssnBaseline')) {
+        config 'ssnbugfixes.mixins.json'
+    }
 }
 
 tasks.named('processResources', ProcessResources).configure {
