@@ -83,7 +83,11 @@ jobs:
               assert 'MixinConfigs: ssnbugfixes.mixins.json' in manifest, manifest
               assert 'ssnbugfixes.mixins.json' in names
               assert 'ssnbugfixes.refmap.json' in names
-          print('Mixin config and refmap packaged in', jars[0])
+              assert not any(name.startswith('io/github/fertiop/ssnbugfixes/gametest/')
+                             for name in names), 'Test-only Java code leaked into production JAR'
+              assert 'data/ssnbugfixes/structures/empty.nbt' not in names, (
+                  'GameTest structure leaked into production JAR')
+          print('Mixin configuration present; GameTest classes/fixtures excluded from', jars[0])
           PY
 
   forge-gametests:
@@ -103,7 +107,7 @@ jobs:
           chmod +x ./gradlew
           set -o pipefail
           ./gradlew --no-daemon --stacktrace runGameTestServer 2>&1 | tee gametest-console.log
-      - name: Assert that all 15 registered GameTests really ran
+      - name: Assert that all 16 registered GameTests really ran
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -111,8 +115,8 @@ jobs:
           text = Path('gametest-console.log').read_text(errors='replace')
           counts = [int(x) for x in re.findall(r"Running test batch '[^']+' \((\d+) tests\)", text)]
           discovered = sum(counts)
-          if discovered < 15:
-              raise SystemExit(f'Expected at least 15 SSN GameTests, found {discovered}; batch counts: {counts}')
+          if discovered < 16:
+              raise SystemExit(f'Expected at least 16 SSN GameTests, found {discovered}; batch counts: {counts}')
           if not re.search(r'GAME TESTS COMPLETE', text):
               raise SystemExit('GameTest completion summary missing; Minecraft may not have run the tests')
           if not re.search(r'All \d+ required tests passed', text):
