@@ -294,6 +294,55 @@ public final class SsnExploratoryGameTests {
         helper.succeed();
     }
 
+    /**
+     * SSN-005 exploratory conservation check when only a single output slot
+     * is available. Container remainders cannot fit in player inventory,
+     * so they must become ItemEntity drops rather than silently vanish.
+     *
+     * The output slot has 63 honey blocks and can accept exactly one craft.
+     * The four input cells contain two honey bottles each (8 total).
+     */
+    @GameTest(template = "empty", timeoutTicks = 80, required = false)
+    public static void ssn_005_full_player_inventory_preserves_crafting_remainders(GameTestHelper helper) {
+        TileMain main = basicNetwork(helper);
+        BlockPos request = new BlockPos(1, 1, 2);
+        helper.setBlock(request, SsnRegistry.Blocks.REQUEST.get());
+        main.getNetwork().doRefresh(new DimPos(helper.getLevel(), helper.absolutePos(MASTER)));
+        ServerPlayer player = mockPlayerWithChannel(helper);
+        for (int slot = 0; slot < player.getInventory().items.size(); slot++) {
+            player.getInventory().items.set(slot, new ItemStack(Items.COBBLESTONE, 64));
+        }
+        player.getInventory().items.set(0, new ItemStack(Items.HONEY_BLOCK, 63));
+
+        ContainerNetworkCraftingTable menu = new ContainerNetworkCraftingTable(
+                1, helper.getLevel(), helper.absolutePos(request), player.getInventory(), player);
+        for (int slot : new int[]{0, 1, 3, 4}) {
+            menu.getCraftMatrix().setItem(slot, new ItemStack(Items.HONEY_BOTTLE, 2));
+        }
+        menu.slotsChanged(menu.getCraftMatrix());
+        helper.assertTrue(count(menu.getCraftMatrix(), Items.HONEY_BOTTLE) == 8,
+                "Full-inventory test setup: expected exactly 8 honey bottles");
+        menu.quickMoveStack(player, 0);
+
+        List<ItemStack> drops = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                new AABB(player.blockPosition()).inflate(32))
+                .stream().map(ItemEntity::getItem).toList();
+        int honey = count(menu.getCraftMatrix(), Items.HONEY_BOTTLE)
+                + count(player.getInventory().items, Items.HONEY_BOTTLE)
+                + count(drops, Items.HONEY_BOTTLE);
+        int glass = count(menu.getCraftMatrix(), Items.GLASS_BOTTLE)
+                + count(player.getInventory().items, Items.GLASS_BOTTLE)
+                + count(drops, Items.GLASS_BOTTLE);
+        int produced = count(player.getInventory().items, Items.HONEY_BLOCK)
+                + count(drops, Items.HONEY_BLOCK) - 63;
+
+        helper.assertTrue(produced == 1 && honey == 4 && glass == 4,
+                "SSN-005 full-inventory conservation: crafted=" + produced
+                        + ", remaining honey=" + honey + ", returned glass=" + glass
+                        + ", dropped stacks=" + drops.size());
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 80)
     public static void ssn_006_failure_in_one_provider_keeps_other_items_visible(GameTestHelper helper) {
         TileMain main = basicNetwork(helper);
