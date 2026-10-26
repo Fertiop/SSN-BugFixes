@@ -1,6 +1,11 @@
 package io.github.fertiop.ssnbugfixes.gametest;
 
+import com.mojang.authlib.GameProfile;
 import io.netty.channel.embedded.EmbeddedChannel;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import java.util.UUID;
 import com.lothrazar.storagenetwork.api.DimPos;
 import com.lothrazar.storagenetwork.block.cable.link.TileCableLink;
 import com.lothrazar.storagenetwork.block.main.TileMain;
@@ -142,13 +147,19 @@ public final class SsnExploratoryGameTests {
     }
 
     /**
-     * GameTest's fake server player has no Netty channel by default.
-     * Attach an in-memory channel so SSN menu packets / teleport sync can
-     * exercise real gameplay code instead of failing in the test harness.
+     * Build a network-backed server player without GameTestHelper's built-in
+     * makeMockServerPlayerInLevel(): that helper invokes PlayerList.placeNewPlayer
+     * with an uninitialized connection, which throws before returning on
+     * Forge 47.3.0. An EmbeddedChannel must exist *before* any login packets.
+     * This isolated test player is not registered in PlayerList.
      */
     private static ServerPlayer mockPlayerWithChannel(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
-        new EmbeddedChannel(player.connection.connection);
+        var server = helper.getLevel().getServer();
+        ServerPlayer player = new ServerPlayer(
+                server, helper.getLevel(), new GameProfile(UUID.randomUUID(), "ssn-test-player"));
+        Connection channelConnection = new Connection(PacketFlow.SERVERBOUND);
+        new EmbeddedChannel(channelConnection);
+        player.connection = new ServerGamePacketListenerImpl(server, channelConnection, player);
         return player;
     }
 
