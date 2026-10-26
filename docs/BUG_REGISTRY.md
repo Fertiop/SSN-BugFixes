@@ -11,7 +11,7 @@ Important: these are SSN's own behavior paths, **not Factotum ↔ SSN compatibil
 | SSN-003 | Duplicate-target cable selection | hypothesis / code path confirmed | Priority/filter of second cable can be ignored | Determine intended dedup semantics; test differing priorities |
 | SSN-004 | Builder remote block placement | hypothesis / code path confirmed | Block placed even if final item extraction fails | Reproduce simulate/execute divergence |
 | SSN-005 | Crafting ingredient remainder | upstream report, unverified in 1.13.2 | Possible item loss on shift-crafting | Reproduce on 1.13.2; compare upstream versions |
-| SSN-006 | Network list enumeration exception | static-confirmed code path, impact unmeasured | Failure of one storage stops enumeration of later storages | Test one faulty handler among valid handlers |
+| SSN-006 | Network list enumeration exception | reproduced (synthetic handler, game) | Failure of one storage stops enumeration of later storages | Test one faulty handler among valid handlers |
 
 ## SSN-001 — TileRequest saveAdditional does not save base connectable capability
 - **Patch candidate:** `src/main/java/io/github/fertiop/ssnbugfixes/mixin/TileRequestSaveMixin.java`; `@Inject` at `saveAdditional` TAIL invokes `super.saveAdditional(tag)`.
@@ -49,6 +49,9 @@ Important: these are SSN's own behavior paths, **not Factotum ↔ SSN compatibil
 - **Status:** external unverified report. Not a confirmed 1.13.2 defect.
 
 ## SSN-006 — getStacks aborts enumeration on one failing provider
+- **Runtime reproduction (2026-10-26):** GitHub Actions Forge GameTest against SSN 1.13.2, `SsnExploratoryGameTests.ssn_006_failure_in_one_provider_keeps_other_items_visible`, ran inside Minecraft and failed with `SSN-006: a throwing provider hid 7 diamonds in an unrelated healthy chest`. The injected broken IItemHandler deliberately threw `IllegalStateException: Intentional SSN-006 provider fault`. [Actions run 40363459996](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40363459996). This confirms the **conditional** fault isolation defect, not its frequency with normal handlers.
+- **Patch status:** No fix for SSN-006 yet. Test is optional expected-red; turn required-green only after an implemented, verified fix.
+
 - **Location:** [NetworkModule.java](https://github.com/Lothrazar/Storage-Network/blob/trunk/1.20.1/src/main/java/com/lothrazar/storagenetwork/block/main/NetworkModule.java).
 - **Observation:** `try/catch` surrounds entire loop over storages in `getStacks(boolean)`; one provider exception skips all later providers in that invocation.
 - **Uncertainty:** Frequency and user-visible impact depend on external storage handlers. Confirm ordering and symptom before prioritizing.
@@ -62,3 +65,11 @@ Each entry must also record: exact SSN source commit and release JAR hash; envir
 - Upstream code baseline: `Lothrazar/Storage-Network` `trunk/1.20.1@7f3573757b7585d9f98fac5f725fa1a9eb5db276`.
 - Bytecode confirmed: `TileRequest.m_183515_` lacks parent `TileConnectable.m_183515_` call, `ItemBuilder.getBlockState` dereferences null `Level` when item has `blockstate`.
 - Patches are isolated on branch `fix/ssn-001-002-source-patches`; do not merge/release before verification.
+
+## Regression suite evidence (2026-10-26)
+
+- Pinned original SSN JAR, 6/6 bytecode characterization checks passed.
+- Forge build + refmap/JAR manifest checks passed in [Actions 40363459996](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40363459996).
+- Real Forge GameTest run in same workflow discovered 13 tests: **10 required passed; 3 optional failed**. SSN-006 failed for the expected defective-behavior assertion, while SSN-004 and SSN-005 failed due missing Netty channel in the fake player, a test harness problem and **not evidence of the SSN defects**. Fake player channel setup was subsequently revised, requires CI retest.
+- New full/partial insertion and NBT conservation tests added after this run; their results must be checked separately on the latest branch.
+- This evidence does **not** prove SSN-003 behavior about priorities or an SSN-005 item-loss bug in SSN 1.13.2.
