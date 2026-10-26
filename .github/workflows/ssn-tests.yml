@@ -2,7 +2,7 @@ name: SSN 1.13.2 regression tests
 
 on:
   push:
-    branches: [main, "fix/**", "test/**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:
