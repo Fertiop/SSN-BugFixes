@@ -26,6 +26,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -137,6 +138,12 @@ public final class SsnExploratoryGameTests {
         menu.slotsChanged(menu.getCraftMatrix());
         helper.assertTrue(count(menu.getCraftMatrix(), Items.HONEY_BOTTLE) == 8,
                 "SSN-005 fixture: all eight input honey bottles must be in the real crafting grid");
+        var recipe = helper.getLevel().getRecipeManager().getRecipeFor(
+                RecipeType.CRAFTING, menu.getCraftMatrix(), helper.getLevel());
+        helper.assertTrue(recipe.isPresent(), "SSN-005 fixture: vanilla honey block recipe missing");
+        var vanillaRemainders = recipe.orElseThrow().getRemainingItems(menu.getCraftMatrix());
+        helper.assertTrue(count(vanillaRemainders, Items.GLASS_BOTTLE) == 4,
+                "SSN-005 fixture: vanilla recipe must return 4 glass bottles per craft");
         menu.quickMoveStack(player, 0); // shift-click output
 
         // NetworkCraftingInventory overrides getItem() and stores its own
