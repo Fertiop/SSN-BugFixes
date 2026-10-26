@@ -9,7 +9,8 @@
     "ItemBuilderNullLevelMixin",
     "NetworkReadIsolationMixin",
     "NetworkPriorityDedupMixin",
-    "NetworkCraftShiftRemainderMixin"
+    "NetworkCraftShiftRemainderMixin",
+    "ItemBuilderPaidPlacementMixin"
   ],
   "injectors": {
     "defaultRequire": 1
