@@ -71,6 +71,17 @@ public final class SsnRegressionGameTests {
                 "Loaded network controller position changed");
         helper.assertTrue(loaded.isDownwards(), "Direction changed on NBT reload");
         helper.assertTrue(loaded.isJeiSearchSynced(), "JEI changed on NBT reload");
+
+        // SSN-001 must not break worlds saved before the parent-NBT patch:
+        // the connectable field is absent in stock SSN 1.13.2.
+        CompoundTag legacy = saved.copy();
+        legacy.remove("connectable");
+        TileRequest fromOldWorld = new TileRequest(helper.absolutePos(pos), helper.getBlockState(pos));
+        fromOldWorld.load(legacy);
+        helper.assertTrue(fromOldWorld.getAutoFocus() == loaded.getAutoFocus(),
+                "Old-world terminal lost auto-focus setting");
+        helper.assertTrue(fromOldWorld.isDownwards() && fromOldWorld.isJeiSearchSynced(),
+                "Old-world terminal UI settings must load even without connectable NBT");
         helper.succeed();
     }
 
