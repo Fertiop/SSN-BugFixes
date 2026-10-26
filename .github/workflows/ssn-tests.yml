@@ -87,7 +87,8 @@ jobs:
           PY
 
   forge-gametests:
-    if: github.event_name == 'workflow_dispatch' && inputs.run_game_tests
+    needs: forge-build
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.run_game_tests)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
