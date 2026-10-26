@@ -1,0 +1,28 @@
+# Gradle / Java output
+.gradle/
+build/
+out/
+*.class
+*.log
+*.hprof
+
+# Local game runs and IDE settings
+run/
+runs/
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Third-party binaries and local secrets
+libs/*.jar
+!.gitkeep
+*.keystore
+*.jks
+.env
+.env.*
+
+# Gradle wrapper JAR is intentionally tracked when added.
+!gradle/wrapper/gradle-wrapper.jar
