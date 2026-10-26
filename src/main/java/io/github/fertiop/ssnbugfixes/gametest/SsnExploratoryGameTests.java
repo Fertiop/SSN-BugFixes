@@ -50,6 +50,44 @@ public final class SsnExploratoryGameTests {
 
     private SsnExploratoryGameTests() {}
 
+    /**
+     * SSN-003: two cables target one physical chest. The stock dedup guard
+     * is intentional, but the chosen *settings* should belong to the
+     * higher-priority cable, not depend on the cable's coordinates.
+     * Optional until priority semantics are confirmed with the owner.
+     */
+    @GameTest(template = "empty", timeoutTicks = 80, required = false)
+    public static void ssn_003_higher_priority_duplicate_link_wins_filter(GameTestHelper helper) {
+        TileMain main = basicNetwork(helper);
+        ((ChestBlockEntity) helper.getBlockEntity(CHEST))
+                .setItem(0, new ItemStack(Items.DIAMOND, 7));
+        helper.setBlock(new BlockPos(2, 1, 2), SsnRegistry.Blocks.KABEL.get());
+        BlockPos secondLinkPos = new BlockPos(3, 1, 2);
+        helper.setBlock(secondLinkPos, SsnRegistry.Blocks.STORAGE_KABEL.get());
+
+        TileCableLink first = (TileCableLink) helper.getBlockEntity(LINK);
+        TileCableLink second = (TileCableLink) helper.getBlockEntity(secondLinkPos);
+        second.setDirection(Direction.NORTH);
+        second.setChanged();
+        IConnectableLink firstCap = first.getCapability(
+                StorageNetworkCapabilities.CONNECTABLE_ITEM_STORAGE_CAPABILITY, null).orElse(null);
+        IConnectableLink secondCap = second.getCapability(
+                StorageNetworkCapabilities.CONNECTABLE_ITEM_STORAGE_CAPABILITY, null).orElse(null);
+        helper.assertTrue(firstCap != null && secondCap != null, "Both duplicate cables must expose SSN link capability");
+
+        // Same chest: the coordinate-earlier link filters diamonds, while the
+        // priority winner does not. Count must stay 7, never 14.
+        firstCap.setPriority(100);
+        firstCap.setFilter(0, new ItemStack(Items.DIAMOND));
+        secondCap.setPriority(-100);
+        main.getNetwork().doRefresh(new DimPos(helper.getLevel(), helper.absolutePos(MASTER)));
+
+        int visible = count(main.getNetwork().getSortedStacks(), Items.DIAMOND);
+        helper.assertTrue(visible == 7,
+                "SSN-003: high priority cable sees 7 diamonds; low priority cable filters them, got " + visible);
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 80, required = false)
     public static void ssn_004_no_free_block_on_failed_extraction(GameTestHelper helper) {
         TileMain main = basicNetwork(helper);
