@@ -98,7 +98,11 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+// GameTests are compiled into the developer run configuration but must not
+// become executable classes in a player's distributable companion JAR.
 tasks.named('jar', Jar).configure {
+    exclude 'io/github/fertiop/ssnbugfixes/gametest/**'
+    exclude 'data/ssnbugfixes/structures/empty.nbt'
     manifest {
         attributes([
             'Specification-Title': mod_id,
