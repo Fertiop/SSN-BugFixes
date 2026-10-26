@@ -100,18 +100,39 @@ def main() -> None:
         if not joined:
             raise TimeoutError(f"Real client did not join Forge SSN server in {MAX_JOIN_SECONDS}s")
 
-        # Verify the normal server-side SSN block entity is still accessible
-        # after a real client successfully completes Forge handshake.
-        time.sleep(5)
+        # Position the actual networked player within interaction reach
+        # of the SSN terminal and keep them on solid ground at y=80.
+        online_response = conn.call("list")
+        username = online_response.split(":", 1)[-1].strip().split(",")[0].strip()
+        if not re.fullmatch(r"[A-Za-z0-9_]{1,16}", username):
+            raise AssertionError(f"RCON did not return a safe Minecraft username: {online_response!r}")
+        issue(conn, "setblock 0 79 -2 minecraft:stone")
+        issue(conn, "setblock 0 79 -1 minecraft:stone")
+        issue(conn, f"tp {username} 0.5 80 -1.5")
+
+        # In the real client, ClientTickEvent invokes MultiPlayerGameMode
+        # right-click. Forge must send the network menu-opening packet,
+        # then the client must own an SSN menu and AbstractContainerScreen.
+        gui_marker = CLIENT_DIR / "multiplayer-gui-opened.txt"
+        gui_deadline = time.monotonic() + 140
+        while time.monotonic() < gui_deadline:
+            if gui_marker.is_file() and "PASS:" in gui_marker.read_text():
+                break
+            if client.poll() is not None:
+                raise AssertionError(f"Client closed before SSN GUI opened (code {client.returncode})")
+            if server.poll() is not None:
+                raise AssertionError("Server closed before SSN GUI acceptance")
+            time.sleep(2)
+        if not gui_marker.is_file():
+            raise AssertionError("Real player joined, but SSN network GUI never opened on client")
+
         snapshot = issue(conn, "data get block 0 80 0")
         if "connectable:" not in snapshot or "master:" not in snapshot:
-            raise AssertionError("Server SSN terminal lost network link after client joined")
-        if client.poll() is not None:
-            raise AssertionError("Minecraft client exited immediately after login")
+            raise AssertionError("Server SSN terminal lost network link after GUI interaction")
         (LOG_DIR / "multiplayer-join-passed.txt").write_text(
-            "PASS: real Forge 1.20.1 Minecraft client connected via protocol handshake "
-            "to dedicated SSN 1.13.2 + SSN-BugFixes server; RCON /list=1\n")
-        print("SSN_MULTIPLAYER PASS: actual Forge handshake + player join and server network access",
+            "PASS: real Forge 1.20.1 client completed protocol handshake, "
+            "joined dedicated server and opened actual SSN request terminal GUI.\n")
+        print("SSN_MULTIPLAYER PASS: real client login + server network + GUI packet and screen",
               flush=True)
 
         stop_client(client)
