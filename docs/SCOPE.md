@@ -17,7 +17,7 @@
 
 ## Проверенный статус
 
-Исходные RED/проверенные GREEN — [GitHub Actions 40387833982](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40387833982). Все 20 GameTests прошли, 10 исходных отказов подтверждены. Сама игра в клиенте и долговременное сохранение диска ещё не проверялись.
+Исходные RED/проверенные GREEN — [GitHub Actions 40387833982](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40387833982). Все 20 GameTests прошли, 10 исходных отказов подтверждены. Настоящий Forge-сервер после полного перезапуска сохранил данные терминала ([40391586565](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40391586565)); клиент Minecraft сформировал подсказку с null Player/Level ([40391860401](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40391860401)). Мультиплеерный GUI и произвольные модпаки пока не проверены.
 
 ## Вне рамок
 
