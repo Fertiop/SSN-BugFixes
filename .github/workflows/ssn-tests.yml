@@ -119,7 +119,11 @@ jobs:
           counts = [int(n) for n in re.findall(r"Running test batch '[^']+' \((\d+) tests\)", log)]
           if sum(counts) < 18 or 'GAME TESTS COMPLETE' not in log:
               raise SystemExit(f'RED baseline invalid: tests did not finish, discovered={sum(counts)}')
-          failed = set(re.findall(r'LogTestReporter/?:?\]: (?:\(optional\) )?([\w]+) failed\.', log))
+          # GameTestRegistry lowercases camelCase test names, and its
+          # required failures use "failed!" while optional failures use
+          # "failed.". Normalize both instead of confusing format with GREEN.
+          failed = {name.lower() for name in re.findall(
+              r'LogTestReporter\]: (?:\(optional\) )?([\w]+) failed[!.]', log)}
           expected_red = {
               'requestTerminalSavesInheritedConnection',
               'ssn_001_request_saves_connectable_and_ui_fields',
@@ -132,6 +136,8 @@ jobs:
               'ssn_005_stackable_honey_bottle_remainder_conservation',
               'ssn_006_failure_in_one_provider_keeps_other_items_visible',
           }
+          expected_red = {name.lower() for name in expected_red}
+          optional = {name.lower() for name in optional}
           missing = expected_red - failed
           unexpected = failed - expected_red - optional
           if missing or unexpected:
