@@ -42,7 +42,12 @@ minecraft {
                 }
             }
         }
-        client {}
+        client {
+            // Real client tooltip smoke: only enabled in explicit CI launches.
+            if (project.hasProperty('ssnClientSmoke')) {
+                property 'ssnbugfixes.clientSmoke', 'true'
+            }
+        }
         server {}
         gameTestServer {
             property 'forge.enabledGameTestNamespaces', mod_id
