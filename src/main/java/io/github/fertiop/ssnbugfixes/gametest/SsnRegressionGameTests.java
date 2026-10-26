@@ -153,6 +153,53 @@ public final class SsnRegressionGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 80)
+    public static void ssn_full_storage_refuses_insert_without_item_loss(GameTestHelper helper) {
+        NetworkFixture fixture = network(helper, false);
+        for (int slot = 0; slot < fixture.chest.getContainerSize(); slot++) {
+            fixture.chest.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
+        }
+        fixture.chest.setChanged();
+
+        ItemStack incoming = new ItemStack(Items.DIAMOND, 5);
+        int simulatedRest = fixture.main.insertStack(incoming.copy(), true);
+        int actualRest = fixture.main.insertStack(incoming.copy(), false);
+
+        helper.assertTrue(simulatedRest == 5 && actualRest == 5,
+                "Full chest must reject five diamonds without falsely confirming insertion");
+        for (int slot = 0; slot < fixture.chest.getContainerSize(); slot++) {
+            ItemStack stack = fixture.chest.getItem(slot);
+            helper.assertTrue(stack.is(Items.COBBLESTONE) && stack.getCount() == 64,
+                    "Full chest slot " + slot + " changed after rejected diamond transfer");
+        }
+        helper.assertTrue(incoming.getCount() == 5,
+                "Input reference was unexpectedly consumed during insertion");
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 80)
+    public static void ssn_partial_insert_returns_exact_remainder(GameTestHelper helper) {
+        NetworkFixture fixture = network(helper, false);
+        fixture.chest.setItem(0, new ItemStack(Items.DIAMOND, 63));
+        for (int slot = 1; slot < fixture.chest.getContainerSize(); slot++) {
+            fixture.chest.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
+        }
+        fixture.chest.setChanged();
+
+        int simulatedRest = fixture.main.insertStack(new ItemStack(Items.DIAMOND, 5), true);
+        helper.assertTrue(simulatedRest == 4 && fixture.chest.getItem(0).getCount() == 63,
+                "Simulation should accept one diamond without modifying the chest");
+        int actualRest = fixture.main.insertStack(new ItemStack(Items.DIAMOND, 5), false);
+
+        helper.assertTrue(actualRest == 4,
+                "Partially filled chest should report four uninserted diamonds");
+        helper.assertTrue(fixture.chest.getItem(0).getCount() == 64,
+                "Network should insert exactly one diamond into 63/64 slot");
+        helper.assertTrue((fixture.chest.getItem(0).getCount() - 63) + actualRest == 5,
+                "Partial insert lost or duplicated diamonds");
+        helper.succeed();
+    }
+
     private static NetworkFixture network(GameTestHelper helper, boolean duplicateLink) {
         helper.setBlock(MASTER, SsnRegistry.Blocks.MASTER.get());
         helper.setBlock(LINK, SsnRegistry.Blocks.STORAGE_KABEL.get());
