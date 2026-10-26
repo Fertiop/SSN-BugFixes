@@ -89,6 +89,13 @@ jobs:
                   'GameTest structure leaked into production JAR')
           print('Mixin configuration present; GameTest classes/fixtures excluded from', jars[0])
           PY
+      - name: Upload experimental test JAR (not a release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSN-BugFixes-EXPERIMENTAL-test-only
+          path: build/libs/*.jar
+          retention-days: 14
+          if-no-files-found: error
 
   forge-expected-red:
     needs: forge-build
