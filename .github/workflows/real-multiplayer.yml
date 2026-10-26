@@ -53,7 +53,11 @@ jobs:
           marker=Path('build/persistence-smoke/multiplayer-join-passed.txt')
           if not marker.exists() or 'PASS: real Forge' not in marker.read_text():
               raise SystemExit('Missing real-player/Forge-protocol login proof')
+          gui=Path('run-client-join/multiplayer-gui-opened.txt')
+          if not gui.exists() or 'PASS:' not in gui.read_text():
+              raise SystemExit('Real SSN menu-open proof missing')
           print(marker.read_text())
+          print(gui.read_text())
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -63,6 +67,7 @@ jobs:
             build/persistence-smoke/server-multiplayer.log
             build/persistence-smoke/client-join.log
             build/persistence-smoke/multiplayer-join-passed.txt
+            run-client-join/multiplayer-gui-opened.txt
             run/logs/
             run/crash-reports/
             run-client-join/logs/
