@@ -47,10 +47,6 @@ minecraft {
         gameTestServer {
             property 'forge.enabledGameTestNamespaces', mod_id
         }
-        // Dedicated Forge test runner (only invoked explicitly).
-        gameTestServer {
-            setForceExit false
-        }
     }
 }
 
@@ -65,7 +61,9 @@ repositories {
 dependencies {
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
     // Original SSN 1.13.2, compile-only: never package third-party mod classes.
-    implementation fg.deobf('maven.modrinth:cVIr8Vz1:UmSTgKWE')
+    compileOnly fg.deobf('maven.modrinth:cVIr8Vz1:UmSTgKWE')
+    runtimeOnly fg.deobf('maven.modrinth:cVIr8Vz1:UmSTgKWE')
+    compileOnly fg.deobf('maven.modrinth:FAUSd09K:CDihtEoy')
     // FLib is a mandatory runtime dependency of SSN; pin the tested 1.20.1 release.
     runtimeOnly fg.deobf('maven.modrinth:FAUSd09K:CDihtEoy')
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
