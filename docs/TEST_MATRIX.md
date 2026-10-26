@@ -1,6 +1,8 @@
 # SSN 1.13.2: acceptance / regression matrix
 
-**Status as of 2026-10-26:** 6/6 original-JAR bytecode checks passed; Forge build and 13 in-game GameTests ran in [Actions 40363459996](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40363459996): **10 required passed, 3 optional failed**. SSN-006 reproduced the intended storage fault; SSN-004 and SSN-005 failed from a missing Netty channel in the fake test player, **not from SSN behavior**. The fake player fixture is corrected in a later commit and requires retest. Two additional full/partial insertion cases have since increased the expected total to **15 GameTests**, whose run status needs checking. No full world restart or client tooltip test has run.
+**Last verified game run:** [Actions 40365724004](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40365724004), commit `f92be520`: 15 GameTests ran, 12 required passed, three optional failed **for their intended defect assertions**, not from broken fake player. SSN-004 free block placement and SSN-006 missing healthy chest stock reproduced with test-only divergent/throwing capabilities. SSN-005 initially showed lost items, **but the test incorrectly used inherited `NetworkCraftingInventory.getItems()`**; corrected to enumerate `getItem(slot)` and account for dropped items. A control assertion for recipe remainders was added. **SSN-005 not yet confirmed until corrected test reruns.** New optional SSN-003 priority test increases expected discovery count to **16**. CI results for the new head remain pending. Six JAR bytecode baseline checks pass and Forge build was verified, but live-world restart/client UI acceptance is not yet done.
+
+
 
 ## Test disciplines
 
@@ -15,10 +17,10 @@
 |---|---|---|---|
 | SSN-001 | `requestTerminalSavesInheritedConnection`: serialized `connectable.master` exists; native UI NBT retained; round-trip | old saves missing tag, chunk unload/load, sorting/JEI state, re-bind to second master | 2 GameTests passed in 13-test run; full restart pending |
 | SSN-002 | `builderReturnsNullWithoutWorldEvenWithSavedState` | no blockstate, real world+stone, actual client tooltip render | 5 GameTests passed in 13-test run; tooltip client test pending |
-| SSN-003 | Two links to one chest; winner honors *specified* priority if intentional; stock never counted twice | swap placement order/priority; same and different filters; double chest; opposite link directions; compare design intent | 1 required duplicate-count GameTest passed; priority winner semantics pending |
-| SSN-004 | Simulated extraction succeeds but real extraction fails: must not leave free placed block | unloaded main, unavailable inventory after simulation, survival vs creative, liquid, blocked target, special block states | 1 optional probe attempted; fake player missing Netty channel, fixture changed and retest pending |
-| SSN-005 | Shift craft stackable ingredients with container remainder: expected output/remainder/remaining ingredients conserved | one-click and shift-click, full inventory, zero spare slots, mixed NBT, recipe differs, vanilla table comparator | 1 optional probe attempted; fake player missing Netty channel, fixture changed and retest pending |
-| SSN-006 | If one linked handler throws, all healthy storage inventories still appear accurately | failing handler before/after good one, throw during count/snapshot, timeout or empty handler, unloaded chunk | 1 optional probe reproduced missing diamonds in healthy chest (Actions 40363459996) |
+| SSN-003 | Two links to one chest; winner honors *specified* priority if intentional; stock never counted twice | swap placement order/priority; same and different filters; double chest; opposite link directions; compare design intent | 1 required dedup check passed; 1 optional competing-priority-and-filter test added, run pending |
+| SSN-004 | Simulated extraction succeeds but real extraction fails: must not leave free placed block | unloaded main, unavailable inventory after simulation, survival vs creative, liquid, blocked target, special block states | 1 optional GameTest reached the fault assertion: SSN-004 reproduced; additional scenarios remain |
+| SSN-005 | Shift craft stackable ingredients with container remainder: expected output/remainder/remaining ingredients conserved | one-click and shift-click, full inventory, zero spare slots, mixed NBT, recipe differs, vanilla table comparator | 1 optional GameTest reached the fault assertion: SSN-004 reproduced; additional scenarios remain |
+| SSN-006 | If one linked handler throws, all healthy storage inventories still appear accurately | failing handler before/after good one, throw during count/snapshot, timeout or empty handler, unloaded chunk | 1 optional GameTest reproduced missing healthy chest items (Actions 40365724004) |
 
 ## CI split
 
@@ -40,9 +42,17 @@ All four original regression tests **passed** in Forge GameTests Actions run 403
 ## Additions (current experimental branch)
 
 - `SsnRegressionGameTests`: SSN-001 terminal NBT, SSN-002 null-Level with/without NBT, SSN-003 two links to one chest, SSN-004 normal simulated/actual item conservation, NBT-sensitive extraction, full/partial insertion conservation.
-- `SsnExploratoryGameTests`: optional known-red SSN-004 free placement under divergent `IItemHandler`, SSN-005 honey-bottle remainder loss during shift crafting, SSN-006 earlier provider exception hiding later chest stock.
+- `SsnExploratoryGameTests`: optional known-red SSN-003 priority vs duplicate filter, SSN-004 free placement under divergent `IItemHandler`, SSN-005 honey-bottle shift-crafting remainder (with explicit control and drop accounting), SSN-006 earlier provider exception hiding later chest stock.
 - `DivergentChestBlockEntity`, `ThrowingChestBlockEntity`: synthetic failure providers used **only** by GameTests.
 - `src/main/resources/data/ssnbugfixes/structures/empty.nbt`: self-contained test structure.
 - `tests/static/test_ssn_1132_bytecode.py`: 6 checks executed locally against original JAR, 6/6 pass. Does **not** validate game behavior.
 
 **CI evidence:** early Gradle/Java test harness compilation failures were corrected; successful Forge build, refmap and 13 GameTests were verified on the original test branch SHA 9c03cb26. Further expanded 15-case run is pending; the workflow now fails unless at least 15 tests were actually discovered and all required tests passed.
+
+## Test packaging policy
+
+`build.gradle` excludes `io/github/fertiop/ssnbugfixes/gametest/**` and `data/ssnbugfixes/structures/empty.nbt` from the distributable JAR. Development GameTest runs still see these classes. CI inspects the built JAR and fails if any test-only bytecode or fixture leaks. This prevents intentional throwing inventory providers from becoming part of the shipped mod.
+
+## Interpreting the 16-case run
+
+Four optional exploratory probes can fail while the CI game-server job succeeds. CI must require >=16 registered tests, assert a completed GameTest summary and absence of required failures; **optional red is evidence of an unresolved defect, not of a repaired bug**. Stop deployment if either SSN-001 or SSN-002 required check fails. For SSN-003, if the competing-priority optional test fails, confirm intended user-visible priority semantics independently before adding a patch.
