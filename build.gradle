@@ -44,6 +44,9 @@ minecraft {
         }
         client {}
         server {}
+        gameTestServer {
+            property 'forge.enabledGameTestNamespaces', mod_id
+        }
         // Dedicated Forge test runner (only invoked explicitly).
         gameTestServer {
             setForceExit false
