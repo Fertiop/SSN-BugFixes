@@ -89,6 +89,25 @@ public final class SsnExploratoryGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "empty", timeoutTicks = 80)
+    public static void ssn_004_request_must_not_report_simulation_as_real_debit(GameTestHelper helper) {
+        TileMain main = basicNetwork(helper);
+        BlockPos chestPos = helper.absolutePos(CHEST);
+        helper.getLevel().removeBlockEntity(chestPos);
+        helper.getLevel().setBlockEntity(
+                new DivergentChestBlockEntity(chestPos, helper.getBlockState(CHEST)));
+        main.getNetwork().doRefresh(new DimPos(helper.getLevel(), helper.absolutePos(MASTER)));
+
+        ItemStackMatcher matcher = new ItemStackMatcher(new ItemStack(Items.STONE), false, false);
+        ItemStack simulation = main.request(matcher, 1, true);
+        ItemStack paid = main.request(matcher, 1, false);
+        helper.assertTrue(simulation.getCount() == 1,
+                "Fixture must advertise one stone during simulation");
+        helper.assertTrue(paid.isEmpty(),
+                "SSN-004: real extraction returned a phantom material from simulation");
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 80, required = false)
     public static void ssn_004_no_free_block_on_failed_extraction(GameTestHelper helper) {
         TileMain main = basicNetwork(helper);

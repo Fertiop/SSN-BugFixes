@@ -10,7 +10,8 @@
     "NetworkReadIsolationMixin",
     "NetworkPriorityDedupMixin",
     "NetworkCraftShiftRemainderMixin",
-    "ItemBuilderPaidPlacementMixin"
+    "ItemBuilderPaidPlacementMixin",
+    "CapabilityLinkCommittedExtractionMixin"
   ],
   "injectors": {
     "defaultRequire": 1
