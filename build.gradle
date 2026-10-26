@@ -47,6 +47,13 @@ minecraft {
             if (project.hasProperty('ssnClientSmoke')) {
                 property 'ssnbugfixes.clientSmoke', 'true'
             }
+            if (project.hasProperty('ssnClientJoin')) {
+                // One isolated real-client to dedicated-server smoke run.
+                // Minecraft 1.20.1 quick play is not the pre-1.20 legacy
+                // --server/--port command-line pair.
+                workingDirectory project.file('run-client-join')
+                args '--quickPlayMultiplayer', '127.0.0.1:25585'
+            }
         }
         server {}
         gameTestServer {
