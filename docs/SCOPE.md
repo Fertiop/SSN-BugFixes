@@ -1,28 +1,31 @@
-# Scope and design
+# SSN-BugFixes — границы проекта и совместимость
 
-## Target
-- `Minecraft 1.20.1`
-- `Forge 47.3.0+` within the `47.x` series
-- `Simple Storage Network 1.13.2` only, mod ID `storagenetwork`
-- `Java 17`
-- FLib version supported by the installed SSN distribution
+## Целевая среда
+- Minecraft **1.20.1**
+- Forge **47.x** (проверялся 47.3.0)
+- Simple Storage Network **строго 1.13.2** (зависимость `[1.13.2,1.13.3)`)
+- Java **17**
+- FLib 0.0.16 в проверяемой dev-среде
 
-## Architecture
-Standalone Forge mod `ssnbugfixes` installed **alongside** official SSN. The mod must declare a mandatory SSN dependency and refuse mismatched SSN versions. Runtime behavior patches, when approved and implemented, should be narrowly targeted, preferably by dedicated Mixin per confirmed defect. One source file per patch area; avoid copying SSN's implementation wholesale.
+Мод `ssnbugfixes` устанавливается **рядом** с оригинальным SSN. Источники и JAR оригинального SSN не перепаковываются. Исправления Factotum не входят в проект.
 
-## Project lifecycle
-1. Confirm defect against SSN 1.13.2 release binary; search existing issues and source history.
-2. Record exact trigger and minimal reproduction.
-3. Implement a narrowly scoped and reversible fix.
-4. Prove zero item loss or duplication; cover reload, client/server and error paths.
-5. Build and test only when authorized; record exact binaries, test reports and versions.
-6. Publish a release JAR only after verification.
+## Технический подход
 
-## Out of scope
-- Factotum compatibility, permissions or tools.
-- Broad rewrites, feature requests, or unrelated optimizations.
-- Repackaging or replacing the upstream SSN JAR.
-- Treating reports from older SSN versions as proof of 1.13.2 failure.
+Семь версионно-ограниченных Mixin-классов: `TileRequestSaveMixin`, `ItemBuilderNullLevelMixin`, `NetworkPriorityDedupMixin`, `ItemBuilderPaidPlacementMixin`, `NetworkCraftShiftRemainderMixin`, `NetworkReadIsolationMixin`, `CapabilityLinkCommittedExtractionMixin`. Изменения адресные. Последний использует `@Overwrite` для исправления неправильного результата реального извлечения и требует особого внимания на совместимость с другими Mixin-патчами той же версии SSN.
 
-## Current limitation
-The initial repository setup provides infrastructure, not finished SSN patches. A Forge starter is **not** a bug fix until a patch and its tests are verified.
+При неудаче установки блока после состоявшегося списания материал возвращается **игроку**, а не повторно отправляется в потенциально неисправную сеть. Дедупликация двух кабелей на одном сундуке сохранена.
+
+## Проверенный статус
+
+Исходные RED/проверенные GREEN — [GitHub Actions 40387833982](https://github.com/Fertiop/SSN-BugFixes/actions/runs/40387833982). Все 20 GameTests прошли, 10 исходных отказов подтверждены. Сама игра в клиенте и долговременное сохранение диска ещё не проверялись.
+
+## Вне рамок
+
+- Интеграция/правила разрешений Factotum.
+- Добавление новых функций SSN вместо исправления дефектов.
+- Изменение чужого оригинального JAR.
+- Выпуск модпака или совместимость со всеми модами без отдельного тестирования.
+
+## Статус выпуска
+
+**Experimental, Draft PR, не релиз.** После тестов полного перезапуска мира/клиента, QA и разрешения владельца можно рассматривать выпуск подписанной/проверенной версии.
