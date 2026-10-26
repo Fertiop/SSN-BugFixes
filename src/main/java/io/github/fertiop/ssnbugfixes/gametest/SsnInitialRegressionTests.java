@@ -2,7 +2,7 @@ package io.github.fertiop.ssnbugfixes.gametest;
 
 import com.lothrazar.storagenetwork.api.DimPos;
 import com.lothrazar.storagenetwork.block.request.TileRequest;
-import com.lothrazar.storagenetwork.capability.CapabilityConnectable;
+import com.lothrazar.storagenetwork.api.IConnectable;
 import com.lothrazar.storagenetwork.item.ItemBuilder;
 import com.lothrazar.storagenetwork.registry.SsnRegistry;
 import com.lothrazar.storagenetwork.registry.StorageNetworkCapabilities;
@@ -35,7 +35,7 @@ public final class SsnInitialRegressionTests {
                 BlockPos.ZERO, SsnRegistry.Blocks.REQUEST.get().defaultBlockState());
 
         // Assign the same stored connection that TileConnectable normally saves.
-        CapabilityConnectable link = terminal.getCapability(
+        IConnectable link = terminal.getCapability(
                 StorageNetworkCapabilities.CONNECTABLE_CAPABILITY, null).orElseThrow(() -> new IllegalStateException("SSN connectable capability missing"));
         link.setMainPos(new DimPos(helper.getLevel(), helper.absolutePos(new BlockPos(1, 1, 1))));
 
